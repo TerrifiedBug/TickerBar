@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		7404D19C7993CD33FB08B58D /* StockTickerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADFBB8F08EEDFB92601682F9 /* StockTickerApp.swift */; };
+		7690D8CE817D7BC49DDF740C /* StockItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56838F3D7FDDA632BAD5C8F5 /* StockItemTests.swift */; };
 		E6113DA9D465315DBE28C77F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DBDE6680A7FD9B348F4D20AA /* Assets.xcassets */; };
+		F856D70E249A413F0A4DE9CA /* StockItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15068B565FB4936419815470 /* StockItem.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -23,6 +25,8 @@
 
 /* Begin PBXFileReference section */
 		03D166ED1C6589834CEC90ED /* StockTicker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StockTicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		15068B565FB4936419815470 /* StockItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockItem.swift; sourceTree = "<group>"; };
+		56838F3D7FDDA632BAD5C8F5 /* StockItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockItemTests.swift; sourceTree = "<group>"; };
 		5AAA7340F995D424D5754196 /* StockTickerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StockTickerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		ADFBB8F08EEDFB92601682F9 /* StockTickerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockTickerApp.swift; sourceTree = "<group>"; };
 		B1A9E9CC5D7EB971811810C9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -34,6 +38,7 @@
 		0C67912423601107F4D18BA8 /* StockTickerTests */ = {
 			isa = PBXGroup;
 			children = (
+				56838F3D7FDDA632BAD5C8F5 /* StockItemTests.swift */,
 			);
 			path = StockTickerTests;
 			sourceTree = "<group>";
@@ -87,6 +92,7 @@
 		7F0E226159EE2124503A1D18 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				15068B565FB4936419815470 /* StockItem.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -175,6 +181,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7690D8CE817D7BC49DDF740C /* StockItemTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -182,6 +189,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F856D70E249A413F0A4DE9CA /* StockItem.swift in Sources */,
 				7404D19C7993CD33FB08B58D /* StockTickerApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -265,6 +273,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -317,6 +326,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

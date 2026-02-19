@@ -47,5 +47,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stockticker.tests
+        GENERATE_INFOPLIST_FILE: true
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/StockTicker.app/Contents/MacOS/StockTicker"
         BUNDLE_LOADER: "$(TEST_HOST)"
