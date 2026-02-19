@@ -4,7 +4,7 @@
 
 **Goal:** Build a macOS menu bar app that shows live stock prices rotating in the menu bar, with a dropdown watchlist, configurable settings, and Yahoo Finance data.
 
-**Architecture:** Pure SwiftUI app using `MenuBarExtra`, `@Observable` model, async/await networking. No external dependencies. Yahoo Finance v8 chart API (one request per symbol). XcodeGen for project generation.
+**Architecture:** Pure SwiftUI app using `MenuBarExtra`, `@Observable` model, async/await networking. No external dependencies. Yahoo Finance v8 chart API via `query2.finance.yahoo.com` with cookie + crumb authentication (one request per symbol). XcodeGen for project generation.
 
 **Tech Stack:** Swift 6.2, SwiftUI, macOS 14+ deployment target, XcodeGen, XCTest
 
@@ -450,6 +450,26 @@ final class StockServiceTests: XCTestCase {
         XCTAssertEqual(stock.previousClose, 183.00)
     }
 
+    func testParseYahooResponseFallsBackToShortName() throws {
+        let json = """
+        {
+            "chart": {
+                "result": [{
+                    "meta": {
+                        "symbol": "AAPL",
+                        "shortName": "Apple Inc",
+                        "regularMarketPrice": 185.23,
+                        "chartPreviousClose": 183.00
+                    }
+                }]
+            }
+        }
+        """.data(using: .utf8)!
+
+        let stock = try StockService.parseQuoteResponse(data: json)
+        XCTAssertEqual(stock.name, "Apple Inc")
+    }
+
     func testParseYahooResponseMissingFields() {
         let json = """
         {
@@ -460,6 +480,12 @@ final class StockServiceTests: XCTestCase {
         """.data(using: .utf8)!
 
         XCTAssertThrowsError(try StockService.parseQuoteResponse(data: json))
+    }
+
+    func testParseCrumbResponse() {
+        let crumb = "abc123XYZ"
+        XCTAssertEqual(crumb.count, 9)
+        XCTAssertFalse(crumb.contains("<html>"))
     }
 }
 ```
@@ -512,8 +538,22 @@ final class StockService {
     private var refreshTimer: Timer?
     private var rotationTimer: Timer?
 
+    // MARK: - Auth State (cookie + crumb for Yahoo Finance)
+    private var crumb: String?
+    private var session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.httpCookieAcceptPolicy = .always
+        config.httpShouldSetCookies = true
+        config.httpCookieStorage = HTTPCookieStorage.shared
+        config.httpAdditionalHeaders = [
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ]
+        return URLSession(configuration: config)
+    }()
+
     // MARK: - Constants
     static let defaultWatchlist = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"]
+    private static let baseURL = "https://query2.finance.yahoo.com"
 
     init() {
         let defaults = UserDefaults.standard
@@ -571,6 +611,44 @@ final class StockService {
         return minuteOfDay >= marketOpen && minuteOfDay < marketClose
     }
 
+    // MARK: - Cookie + Crumb Authentication
+    //
+    // Yahoo Finance requires a session cookie + crumb token for API access.
+    // Flow (based on yfinance library):
+    //   1. GET https://fc.yahoo.com → sets Yahoo session cookie (response 404s, but cookie is set)
+    //   2. GET https://query2.finance.yahoo.com/v1/test/getcrumb → returns plaintext crumb
+    //   3. Append &crumb={crumb} to all API requests
+
+    private func ensureAuth() async throws {
+        if crumb != nil { return }
+
+        // Step 1: Get cookie by hitting fc.yahoo.com
+        let cookieURL = URL(string: "https://fc.yahoo.com")!
+        let _ = try? await session.data(from: cookieURL)
+
+        // Step 2: Get crumb using the cookie
+        let crumbURL = URL(string: "\(Self.baseURL)/v1/test/getcrumb")!
+        let (crumbData, crumbResponse) = try await session.data(from: crumbURL)
+
+        guard let httpResponse = crumbResponse as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw StockServiceError.authError
+        }
+
+        guard let crumbString = String(data: crumbData, encoding: .utf8),
+              !crumbString.isEmpty,
+              !crumbString.contains("<html>") else {
+            throw StockServiceError.authError
+        }
+
+        self.crumb = crumbString
+    }
+
+    /// Invalidate auth so next request re-fetches cookie + crumb
+    private func invalidateAuth() {
+        crumb = nil
+    }
+
     // MARK: - Networking
 
     func fetchAllQuotes() async {
@@ -580,6 +658,15 @@ final class StockService {
 
         isLoading = true
         errorMessage = nil
+
+        // Ensure we have a valid crumb before fetching
+        do {
+            try await ensureAuth()
+        } catch {
+            errorMessage = "Authentication failed"
+            isLoading = false
+            return
+        }
 
         var fetched: [StockItem] = []
 
@@ -606,15 +693,26 @@ final class StockService {
 
         if fetched.isEmpty && !watchlist.isEmpty {
             errorMessage = "Unable to fetch quotes"
+            // Auth might have expired -- invalidate so next attempt re-authenticates
+            invalidateAuth()
         }
     }
 
     private func fetchQuote(for symbol: String) async -> StockItem? {
-        let urlString = "https://query1.finance.yahoo.com/v8/finance/chart/\(symbol)?interval=1d&range=1d"
+        guard let crumb = crumb else { return nil }
+        let urlString = "\(Self.baseURL)/v8/finance/chart/\(symbol)?interval=1d&range=1d&crumb=\(crumb)"
         guard let url = URL(string: urlString) else { return nil }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await session.data(from: url)
+
+            // If we get a 401/403, invalidate auth for next cycle
+            if let httpResponse = response as? HTTPURLResponse,
+               httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                invalidateAuth()
+                return nil
+            }
+
             return try Self.parseQuoteResponse(data: data)
         } catch {
             return nil
@@ -691,6 +789,7 @@ final class StockService {
 
     enum StockServiceError: Error {
         case parseError
+        case authError
     }
 }
 
