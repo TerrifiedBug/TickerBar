@@ -9,9 +9,10 @@
 /* Begin PBXBuildFile section */
 		1206ACA3A55E1A4E1896BB35 /* StockServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC8F977CC4CABE1815EC5F0F /* StockServiceTests.swift */; };
 		631F6E7C8AED98BF8B5E620D /* StockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DF1F4E796FC32743DAF80A0 /* StockService.swift */; };
-		7404D19C7993CD33FB08B58D /* StockTickerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADFBB8F08EEDFB92601682F9 /* StockTickerApp.swift */; };
+		7404D19C7993CD33FB08B58D /* TickerBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADFBB8F08EEDFB92601682F9 /* TickerBarApp.swift */; };
 		7690D8CE817D7BC49DDF740C /* StockItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56838F3D7FDDA632BAD5C8F5 /* StockItemTests.swift */; };
 		8A834BC05313ED7089884EAA /* WatchlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 546AF9D5C78E7119E3C4397E /* WatchlistView.swift */; };
+		A1B2C3D4E5F60718192A3B4C /* MenuBarLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6071819A1B2C3D4E5F6 /* MenuBarLabel.swift */; };
 		E6113DA9D465315DBE28C77F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DBDE6680A7FD9B348F4D20AA /* Assets.xcassets */; };
 		E9981276E1CF2B28C8109B2F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8B1157F816CFF9BBB9B3571 /* SettingsView.swift */; };
 		F856D70E249A413F0A4DE9CA /* StockItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15068B565FB4936419815470 /* StockItem.swift */; };
@@ -23,47 +24,48 @@
 			containerPortal = C0EFC2323ED7FDF3BD13ACE7 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 9ACD20D2C97100CD8A5C346E;
-			remoteInfo = StockTicker;
+			remoteInfo = TickerBar;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		03D166ED1C6589834CEC90ED /* StockTicker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StockTicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		03D166ED1C6589834CEC90ED /* TickerBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TickerBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		15068B565FB4936419815470 /* StockItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockItem.swift; sourceTree = "<group>"; };
 		546AF9D5C78E7119E3C4397E /* WatchlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistView.swift; sourceTree = "<group>"; };
 		56838F3D7FDDA632BAD5C8F5 /* StockItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockItemTests.swift; sourceTree = "<group>"; };
-		5AAA7340F995D424D5754196 /* StockTickerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StockTickerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5AAA7340F995D424D5754196 /* TickerBarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TickerBarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6DF1F4E796FC32743DAF80A0 /* StockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockService.swift; sourceTree = "<group>"; };
-		ADFBB8F08EEDFB92601682F9 /* StockTickerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockTickerApp.swift; sourceTree = "<group>"; };
+		ADFBB8F08EEDFB92601682F9 /* TickerBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TickerBarApp.swift; sourceTree = "<group>"; };
 		B1A9E9CC5D7EB971811810C9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DBDE6680A7FD9B348F4D20AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EC8F977CC4CABE1815EC5F0F /* StockServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockServiceTests.swift; sourceTree = "<group>"; };
+		D4E5F6071819A1B2C3D4E5F6 /* MenuBarLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabel.swift; sourceTree = "<group>"; };
 		F8B1157F816CFF9BBB9B3571 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		FFA0DD350D92AFA182D7215C /* StockTicker.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockTicker.entitlements; sourceTree = "<group>"; };
+		FFA0DD350D92AFA182D7215C /* TickerBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TickerBar.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
-		0C67912423601107F4D18BA8 /* StockTickerTests */ = {
+		0C67912423601107F4D18BA8 /* TickerBarTests */ = {
 			isa = PBXGroup;
 			children = (
 				56838F3D7FDDA632BAD5C8F5 /* StockItemTests.swift */,
 				EC8F977CC4CABE1815EC5F0F /* StockServiceTests.swift */,
 			);
-			path = StockTickerTests;
+			path = TickerBarTests;
 			sourceTree = "<group>";
 		};
-		4025540C0EEF2C4FE8877BD5 /* StockTicker */ = {
+		4025540C0EEF2C4FE8877BD5 /* TickerBar */ = {
 			isa = PBXGroup;
 			children = (
 				DBDE6680A7FD9B348F4D20AA /* Assets.xcassets */,
 				B1A9E9CC5D7EB971811810C9 /* Info.plist */,
-				FFA0DD350D92AFA182D7215C /* StockTicker.entitlements */,
-				ADFBB8F08EEDFB92601682F9 /* StockTickerApp.swift */,
+				FFA0DD350D92AFA182D7215C /* TickerBar.entitlements */,
+				ADFBB8F08EEDFB92601682F9 /* TickerBarApp.swift */,
 				7F0E226159EE2124503A1D18 /* Models */,
 				4C3B2A20AAEFBF8DC77B5988 /* Services */,
 				5A35510875481702C568BBB2 /* Views */,
 			);
-			path = StockTicker;
+			path = TickerBar;
 			sourceTree = "<group>";
 		};
 		4C3B2A20AAEFBF8DC77B5988 /* Services */ = {
@@ -77,6 +79,7 @@
 		5A35510875481702C568BBB2 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				D4E5F6071819A1B2C3D4E5F6 /* MenuBarLabel.swift */,
 				F8B1157F816CFF9BBB9B3571 /* SettingsView.swift */,
 				546AF9D5C78E7119E3C4397E /* WatchlistView.swift */,
 			);
@@ -86,8 +89,8 @@
 		7303D82EB9E66657D1B04F5A /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				03D166ED1C6589834CEC90ED /* StockTicker.app */,
-				5AAA7340F995D424D5754196 /* StockTickerTests.xctest */,
+				03D166ED1C6589834CEC90ED /* TickerBar.app */,
+				5AAA7340F995D424D5754196 /* TickerBarTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,8 +98,8 @@
 		758B7F26AE7705BA6BE582B2 = {
 			isa = PBXGroup;
 			children = (
-				4025540C0EEF2C4FE8877BD5 /* StockTicker */,
-				0C67912423601107F4D18BA8 /* StockTickerTests */,
+				4025540C0EEF2C4FE8877BD5 /* TickerBar */,
+				0C67912423601107F4D18BA8 /* TickerBarTests */,
 				7303D82EB9E66657D1B04F5A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -112,9 +115,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		173B8A840F887241D737ABE4 /* StockTickerTests */ = {
+		173B8A840F887241D737ABE4 /* TickerBarTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 38821C0FE5987841A601D570 /* Build configuration list for PBXNativeTarget "StockTickerTests" */;
+			buildConfigurationList = 38821C0FE5987841A601D570 /* Build configuration list for PBXNativeTarget "TickerBarTests" */;
 			buildPhases = (
 				4B1513BDC867D0691BE01444 /* Sources */,
 			);
@@ -123,16 +126,16 @@
 			dependencies = (
 				4DCF23CA68A66A50397F328F /* PBXTargetDependency */,
 			);
-			name = StockTickerTests;
+			name = TickerBarTests;
 			packageProductDependencies = (
 			);
-			productName = StockTickerTests;
-			productReference = 5AAA7340F995D424D5754196 /* StockTickerTests.xctest */;
+			productName = TickerBarTests;
+			productReference = 5AAA7340F995D424D5754196 /* TickerBarTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		9ACD20D2C97100CD8A5C346E /* StockTicker */ = {
+		9ACD20D2C97100CD8A5C346E /* TickerBar */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3F5E3E1533A7E20360CBEF3A /* Build configuration list for PBXNativeTarget "StockTicker" */;
+			buildConfigurationList = 3F5E3E1533A7E20360CBEF3A /* Build configuration list for PBXNativeTarget "TickerBar" */;
 			buildPhases = (
 				ADAFC652BD20D931F4C9F9BC /* Sources */,
 				F0A6B242394F644EB440A6A2 /* Resources */,
@@ -141,11 +144,11 @@
 			);
 			dependencies = (
 			);
-			name = StockTicker;
+			name = TickerBar;
 			packageProductDependencies = (
 			);
-			productName = StockTicker;
-			productReference = 03D166ED1C6589834CEC90ED /* StockTicker.app */;
+			productName = TickerBar;
+			productReference = 03D166ED1C6589834CEC90ED /* TickerBar.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -157,7 +160,7 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
 			};
-			buildConfigurationList = 5E95C285D0EAF7D57AAA3A99 /* Build configuration list for PBXProject "StockTicker" */;
+			buildConfigurationList = 5E95C285D0EAF7D57AAA3A99 /* Build configuration list for PBXProject "TickerBar" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -171,8 +174,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				9ACD20D2C97100CD8A5C346E /* StockTicker */,
-				173B8A840F887241D737ABE4 /* StockTickerTests */,
+				9ACD20D2C97100CD8A5C346E /* TickerBar */,
+				173B8A840F887241D737ABE4 /* TickerBarTests */,
 			);
 		};
 /* End PBXProject section */
@@ -205,8 +208,9 @@
 				E9981276E1CF2B28C8109B2F /* SettingsView.swift in Sources */,
 				F856D70E249A413F0A4DE9CA /* StockItem.swift in Sources */,
 				631F6E7C8AED98BF8B5E620D /* StockService.swift in Sources */,
-				7404D19C7993CD33FB08B58D /* StockTickerApp.swift in Sources */,
+				7404D19C7993CD33FB08B58D /* TickerBarApp.swift in Sources */,
 				8A834BC05313ED7089884EAA /* WatchlistView.swift in Sources */,
+				A1B2C3D4E5F60718192A3B4C /* MenuBarLabel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -215,7 +219,7 @@
 /* Begin PBXTargetDependency section */
 		4DCF23CA68A66A50397F328F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 9ACD20D2C97100CD8A5C346E /* StockTicker */;
+			target = 9ACD20D2C97100CD8A5C346E /* TickerBar */;
 			targetProxy = C1596C35444C4F0E3AFA48E1 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -295,9 +299,9 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.stockticker.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tickerbar.tests;
 				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StockTicker.app/Contents/MacOS/StockTicker";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TickerBar.app/Contents/MacOS/TickerBar";
 			};
 			name = Release;
 		};
@@ -305,16 +309,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = StockTicker/StockTicker.entitlements;
+				CODE_SIGN_ENTITLEMENTS = TickerBar/TickerBar.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				INFOPLIST_FILE = StockTicker/Info.plist;
+				INFOPLIST_FILE = TickerBar/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.stockticker.app;
-				PRODUCT_NAME = StockTicker;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tickerbar.app;
+				PRODUCT_NAME = TickerBar;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -323,16 +327,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = StockTicker/StockTicker.entitlements;
+				CODE_SIGN_ENTITLEMENTS = TickerBar/TickerBar.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				INFOPLIST_FILE = StockTicker/Info.plist;
+				INFOPLIST_FILE = TickerBar/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.stockticker.app;
-				PRODUCT_NAME = StockTicker;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tickerbar.app;
+				PRODUCT_NAME = TickerBar;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -348,9 +352,9 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.stockticker.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tickerbar.tests;
 				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StockTicker.app/Contents/MacOS/StockTicker";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TickerBar.app/Contents/MacOS/TickerBar";
 			};
 			name = Debug;
 		};
@@ -413,7 +417,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		38821C0FE5987841A601D570 /* Build configuration list for PBXNativeTarget "StockTickerTests" */ = {
+		38821C0FE5987841A601D570 /* Build configuration list for PBXNativeTarget "TickerBarTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E27407AFFDABB7934DB733DB /* Debug */,
@@ -422,7 +426,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		3F5E3E1533A7E20360CBEF3A /* Build configuration list for PBXNativeTarget "StockTicker" */ = {
+		3F5E3E1533A7E20360CBEF3A /* Build configuration list for PBXNativeTarget "TickerBar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AEC0EA4CC826649BEE471080 /* Debug */,
@@ -431,7 +435,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		5E95C285D0EAF7D57AAA3A99 /* Build configuration list for PBXProject "StockTicker" */ = {
+		5E95C285D0EAF7D57AAA3A99 /* Build configuration list for PBXProject "TickerBar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				582F8AD6218661CF3F67E152 /* Debug */,

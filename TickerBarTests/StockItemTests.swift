@@ -1,5 +1,5 @@
 import XCTest
-@testable import StockTicker
+@testable import TickerBar
 
 final class StockItemTests: XCTestCase {
 

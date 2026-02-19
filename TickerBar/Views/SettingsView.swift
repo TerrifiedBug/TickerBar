@@ -58,6 +58,12 @@ struct SettingsView: View {
                 }
             }
 
+            // Menu bar display
+            Toggle("Compact menu bar", isOn: $service.compactMenuBar)
+
+            // Show percent change in menu bar
+            Toggle("Show % change in menu bar", isOn: $service.showPercentChange)
+
             // Market hours only
             Toggle("Only refresh during market hours", isOn: $service.marketHoursOnly)
 

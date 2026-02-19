@@ -1,14 +1,14 @@
 import SwiftUI
 
 @main
-struct StockTickerApp: App {
+struct TickerBarApp: App {
     @State private var stockService = StockService()
 
     var body: some Scene {
         MenuBarExtra {
             WatchlistView(service: stockService)
         } label: {
-            Text(stockService.menuBarText)
+            MenuBarLabel(service: stockService)
         }
         .menuBarExtraStyle(.window)
         .defaultSize(width: 300, height: 400)

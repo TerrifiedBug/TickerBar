@@ -30,6 +30,12 @@ final class StockService {
     var marketHoursOnly: Bool {
         didSet { UserDefaults.standard.set(marketHoursOnly, forKey: "marketHoursOnly") }
     }
+    var showPercentChange: Bool {
+        didSet { UserDefaults.standard.set(showPercentChange, forKey: "showPercentChange") }
+    }
+    var compactMenuBar: Bool {
+        didSet { UserDefaults.standard.set(compactMenuBar, forKey: "compactMenuBar") }
+    }
 
     // MARK: - Timers
     private var refreshTimer: Timer?
@@ -64,6 +70,8 @@ final class StockService {
         self.rotationSpeed = defaults.double(forKey: "rotationSpeed").nonZero ?? 5
         self.pinnedSymbol = defaults.string(forKey: "pinnedSymbol") ?? Self.defaultWatchlist[0]
         self.marketHoursOnly = defaults.object(forKey: "marketHoursOnly") as? Bool ?? true
+        self.showPercentChange = defaults.object(forKey: "showPercentChange") as? Bool ?? true
+        self.compactMenuBar = defaults.object(forKey: "compactMenuBar") as? Bool ?? true
     }
 
     // MARK: - Display
@@ -148,8 +156,10 @@ final class StockService {
 
     // MARK: - Networking
 
-    func fetchAllQuotes() async {
-        if marketHoursOnly && !Self.isMarketOpen() {
+    func fetchAllQuotes(isTimerTriggered: Bool = false) async {
+        // Only skip fetching for automatic timer refreshes during closed market.
+        // Manual refreshes, initial load, and add-stock fetches always proceed.
+        if isTimerTriggered && marketHoursOnly && !Self.isMarketOpen() {
             return
         }
 
@@ -274,7 +284,7 @@ final class StockService {
         refreshTimer?.invalidate()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                await self?.fetchAllQuotes()
+                await self?.fetchAllQuotes(isTimerTriggered: true)
             }
         }
     }
