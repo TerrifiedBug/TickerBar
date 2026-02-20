@@ -71,7 +71,7 @@ final class StockService {
         self.pinnedSymbol = defaults.string(forKey: "pinnedSymbol") ?? Self.defaultWatchlist[0]
         self.marketHoursOnly = defaults.object(forKey: "marketHoursOnly") as? Bool ?? true
         self.showPercentChange = defaults.object(forKey: "showPercentChange") as? Bool ?? true
-        self.compactMenuBar = defaults.object(forKey: "compactMenuBar") as? Bool ?? true
+        self.compactMenuBar = defaults.object(forKey: "compactMenuBar") as? Bool ?? false
     }
 
     // MARK: - Display
@@ -267,8 +267,9 @@ final class StockService {
             ?? meta["shortName"] as? String
             ?? symbol
         let exchangeTZ = meta["exchangeTimezoneName"] as? String
+        let currency = meta["currency"] as? String
 
-        return StockItem(symbol: symbol, name: name, price: price, previousClose: previousClose, exchangeTimezoneName: exchangeTZ)
+        return StockItem(symbol: symbol, name: name, price: price, previousClose: previousClose, exchangeTimezoneName: exchangeTZ, currency: currency)
     }
 
     // MARK: - Watchlist Management
@@ -279,9 +280,59 @@ final class StockService {
         watchlist.append(uppercased)
     }
 
+    /// Validate a ticker by attempting to fetch its quote. Returns nil on success, or an error message.
+    func validateSymbol(_ symbol: String) async -> String? {
+        do {
+            try await ensureAuth()
+        } catch {
+            return "Unable to validate (auth failed)"
+        }
+
+        let stock = await Self.fetchQuote(for: symbol, crumb: crumb)
+        if stock == nil {
+            return "\(symbol) is not a valid ticker symbol"
+        }
+        return nil
+    }
+
     func removeSymbol(_ symbol: String) {
         watchlist.removeAll { $0 == symbol }
         stocks.removeAll { $0.symbol == symbol }
+    }
+
+    // MARK: - Symbol Search
+
+    struct SymbolSearchResult: Identifiable {
+        let id = UUID()
+        let symbol: String
+        let name: String
+        let exchange: String
+    }
+
+    func searchSymbols(_ query: String) async -> [SymbolSearchResult] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return [] }
+
+        let urlString = "\(Self.baseURL)/v1/finance/search?q=\(trimmed)&quotesCount=6&newsCount=0&listsCount=0"
+        guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString) else { return [] }
+
+        do {
+            let (data, response) = try await Self.session.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else { return [] }
+
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let quotes = json?["quotes"] as? [[String: Any]] else { return [] }
+
+            return quotes.compactMap { quote in
+                guard let symbol = quote["symbol"] as? String,
+                      let name = (quote["shortname"] as? String) ?? (quote["longname"] as? String) else { return nil }
+                let exchange = quote["exchDisp"] as? String ?? ""
+                return SymbolSearchResult(symbol: symbol, name: name, exchange: exchange)
+            }
+        } catch {
+            return []
+        }
     }
 
     // MARK: - Timer Management

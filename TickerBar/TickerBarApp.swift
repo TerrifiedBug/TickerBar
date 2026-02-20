@@ -18,7 +18,10 @@ struct TickerBarApp: App {
     init() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [stockService, updateChecker] in
             stockService.startTimers()
-            Task { await updateChecker.checkForUpdates() }
+            let autoCheck = UserDefaults.standard.object(forKey: "autoCheckForUpdates") as? Bool ?? true
+            if autoCheck {
+                Task { await updateChecker.checkForUpdates() }
+            }
         }
     }
 }

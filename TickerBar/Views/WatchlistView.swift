@@ -6,6 +6,9 @@ struct WatchlistView: View {
     @State private var newSymbol = ""
     @State private var showSettings = false
     @State private var addError: String?
+    @State private var isValidating = false
+    @State private var searchResults: [StockService.SymbolSearchResult] = []
+    @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -105,14 +108,64 @@ struct WatchlistView: View {
                 TextField("Add symbol...", text: $newSymbol)
                     .textFieldStyle(.plain)
                     .onSubmit { addSymbol() }
-                Button(action: addSymbol) {
-                    Image(systemName: "plus.circle.fill")
+                    .onChange(of: newSymbol) { _, newValue in
+                        searchTask?.cancel()
+                        let query = newValue.trimmingCharacters(in: .whitespaces)
+                        if query.isEmpty {
+                            searchResults = []
+                            return
+                        }
+                        searchTask = Task {
+                            try? await Task.sleep(for: .milliseconds(300))
+                            guard !Task.isCancelled else { return }
+                            let results = await service.searchSymbols(query)
+                            if !Task.isCancelled {
+                                searchResults = results
+                            }
+                        }
+                    }
+                if isValidating {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Button(action: addSymbol) {
+                        Image(systemName: "plus.circle.fill")
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(newSymbol.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                .buttonStyle(.plain)
-                .disabled(newSymbol.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+
+            // Search results dropdown
+            if !searchResults.isEmpty && !newSymbol.trimmingCharacters(in: .whitespaces).isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(searchResults) { result in
+                        Button(action: {
+                            selectSearchResult(result)
+                        }) {
+                            HStack {
+                                Text(result.symbol)
+                                    .font(.system(.caption, design: .monospaced, weight: .semibold))
+                                Text(result.name)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(result.exchange)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .background(.background.opacity(0.5))
+            }
 
             if let addError {
                 Text(addError)
@@ -154,7 +207,7 @@ struct WatchlistView: View {
             // Inline settings
             if showSettings {
                 Divider()
-                SettingsView(service: service)
+                SettingsView(service: service, updateChecker: updateChecker)
             }
         }
         .frame(width: 300)
@@ -166,12 +219,39 @@ struct WatchlistView: View {
 
         if service.watchlist.contains(symbol) {
             addError = "\(symbol) is already in your watchlist"
-        } else {
-            service.addSymbol(symbol)
-            addError = nil
-            Task { await service.fetchAllQuotes() }
+            newSymbol = ""
+            return
         }
+
+        addError = nil
+        isValidating = true
+        let symbolToAdd = symbol
         newSymbol = ""
+
+        Task {
+            if let error = await service.validateSymbol(symbolToAdd) {
+                addError = error
+            } else {
+                service.addSymbol(symbolToAdd)
+                await service.fetchAllQuotes()
+            }
+            isValidating = false
+        }
+    }
+
+    private func selectSearchResult(_ result: StockService.SymbolSearchResult) {
+        let symbol = result.symbol
+        searchResults = []
+        newSymbol = ""
+
+        if service.watchlist.contains(symbol) {
+            addError = "\(symbol) is already in your watchlist"
+            return
+        }
+
+        addError = nil
+        service.addSymbol(symbol)
+        Task { await service.fetchAllQuotes() }
     }
 
     private func openYahooFinance(symbol: String) {
@@ -197,7 +277,7 @@ struct StockRowView: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text("$\(String(format: "%.2f", stock.price))")
+                Text("\(stock.currencySymbol)\(String(format: "%.2f", stock.price))")
                     .font(.system(.body, design: .monospaced))
 
                 HStack(spacing: 2) {
