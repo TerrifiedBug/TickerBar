@@ -117,9 +117,10 @@ jobs:
           git push origin master
 
       - name: Update Homebrew cask
+        continue-on-error: true
         env:
           TAG: ${{ github.ref_name }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           VERSION="${TAG#v}"
           SHA256=$(shasum -a 256 build/Build/Products/Release/TickerBar.zip | awk '{print $1}')
