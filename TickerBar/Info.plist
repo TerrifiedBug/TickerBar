@@ -17,12 +17,20 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.1</string>
+	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>2</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>
+	<true/>
+	<key>SUPublicEDKey</key>
+	<string>XSwbLtdr2wVhhFCaOV/FJuGEtpTngVBU098oOwazgtk=</string>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/TerrifiedBug/TickerBar/master/appcast.xml</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableInstallerLauncherService</key>
 	<true/>
 </dict>
 </plist>

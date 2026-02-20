@@ -3,11 +3,8 @@ import ServiceManagement
 
 struct SettingsView: View {
     @Bindable var service: StockService
-    var updateChecker: UpdateChecker
+    @ObservedObject var updateChecker: UpdateChecker
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var autoCheckForUpdates = UserDefaults.standard.object(forKey: "autoCheckForUpdates") as? Bool ?? true
-    @State private var isCheckingForUpdates = false
-    @State private var updateCheckResult: String?
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
@@ -102,41 +99,15 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Toggle("Automatically check for updates", isOn: $autoCheckForUpdates)
-                .onChange(of: autoCheckForUpdates) { _, newValue in
-                    UserDefaults.standard.set(newValue, forKey: "autoCheckForUpdates")
-                }
+            Toggle("Automatically check for updates", isOn: Binding(
+                get: { updateChecker.automaticallyChecksForUpdates },
+                set: { updateChecker.automaticallyChecksForUpdates = $0 }
+            ))
 
-            HStack {
-                Button(action: {
-                    isCheckingForUpdates = true
-                    updateCheckResult = nil
-                    Task {
-                        updateChecker.dismissed = false
-                        await updateChecker.checkForUpdates()
-                        isCheckingForUpdates = false
-                        if updateChecker.availableVersion != nil {
-                            updateCheckResult = "v\(updateChecker.availableVersion!) available"
-                        } else {
-                            updateCheckResult = "You're on the latest version"
-                        }
-                    }
-                }) {
-                    if isCheckingForUpdates {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Text("Check for Updates")
-                    }
-                }
-                .disabled(isCheckingForUpdates)
-
-                if let result = updateCheckResult {
-                    Text(result)
-                        .font(.caption)
-                        .foregroundStyle(updateChecker.availableVersion != nil ? .blue : .secondary)
-                }
+            Button("Check for Updates") {
+                updateChecker.checkForUpdates()
             }
+            .disabled(!updateChecker.canCheckForUpdates)
         }
         .padding(12)
     }

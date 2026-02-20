@@ -1,6 +1,10 @@
-# TickerBar
+<p align="center">
+  <img src="TickerBar/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width="128" height="128" alt="TickerBar icon">
+</p>
 
-A lightweight macOS menu bar app for tracking stock prices in real-time using Yahoo Finance data.
+<h1 align="center">TickerBar</h1>
+
+<p align="center">A lightweight macOS menu bar app for tracking stock prices in real-time using Yahoo Finance data.</p>
 
 ## Features
 
@@ -12,14 +16,16 @@ A lightweight macOS menu bar app for tracking stock prices in real-time using Ya
 - **Correct currency symbols** — displays prices in the stock's native currency (USD, GBP, EUR, JPY, etc.)
 - **Ticker search** — autocomplete suggestions from Yahoo Finance when adding symbols
 - **Symbol validation** — prevents adding invalid ticker symbols
-- **Update checker** — notifies you when a new version is available
+- **Auto-updates** — in-app updates via Sparkle, no manual re-downloading needed
 - **Launch at login** — optional auto-start via macOS Login Items
 
 ## Installation
 
 1. Download `TickerBar.zip` from the [latest release](https://github.com/TerrifiedBug/TickerBar/releases/latest)
 2. Unzip and drag `TickerBar.app` to your Applications folder
-3. On first launch, macOS will show a Gatekeeper warning since the app is not notarized. Right-click the app and select **Open**, then click **Open** in the dialog to allow it
+3. On first launch, macOS may show a Gatekeeper warning since the app is not notarized:
+   - Right-click the app and select **Open**, then click **Open** in the dialog
+   - Or run `xattr -cr /Applications/TickerBar.app` in Terminal to remove the quarantine flag
 
 ## Build from Source
 

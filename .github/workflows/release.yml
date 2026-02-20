@@ -20,17 +20,78 @@ jobs:
             -scheme TickerBar \
             -configuration Release \
             -derivedDataPath build \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGN_IDENTITY="-"
+
+      - name: Codesign app
+        run: |
+          codesign --force --deep --sign - \
+            build/Build/Products/Release/TickerBar.app
 
       - name: Package app
         run: |
           cd build/Build/Products/Release
           zip -r -y TickerBar.zip TickerBar.app
 
+      - name: Sign update with Sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          SPARKLE_BIN="build/SourcePackages/artifacts/sparkle/Sparkle/bin"
+          if [ ! -f "$SPARKLE_BIN/sign_update" ]; then
+            xcodebuild -project TickerBar.xcodeproj \
+              -scheme TickerBar \
+              -configuration Release \
+              -derivedDataPath build \
+              -resolvePackageDependencies
+            SPARKLE_BIN="build/SourcePackages/artifacts/sparkle/Sparkle/bin"
+          fi
+          SIGNATURE=$("$SPARKLE_BIN/sign_update" \
+            build/Build/Products/Release/TickerBar.zip \
+            --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY") \
+            | grep "sparkle:edSignature" | sed 's/.*sparkle:edSignature="\([^"]*\)".*/\1/')
+          echo "SPARKLE_SIGNATURE=$SIGNATURE" >> "$GITHUB_ENV"
+          ZIP_SIZE=$(stat -f%z build/Build/Products/Release/TickerBar.zip)
+          echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
+
+      - name: Generate appcast.xml
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          cat > appcast.xml << XMLEOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <channel>
+              <title>TickerBar Updates</title>
+              <item>
+                <title>Version $VERSION</title>
+                <sparkle:version>$VERSION</sparkle:version>
+                <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+                <pubDate>$(date -R)</pubDate>
+                <enclosure
+                  url="https://github.com/TerrifiedBug/TickerBar/releases/download/$TAG/TickerBar.zip"
+                  sparkle:edSignature="$SPARKLE_SIGNATURE"
+                  length="$ZIP_SIZE"
+                  type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          XMLEOF
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: build/Build/Products/Release/TickerBar.zip
           generate_release_notes: true
+
+      - name: Commit appcast.xml
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin master
+          git checkout master
+          git add appcast.xml
+          git commit -m "Update appcast.xml for $TAG" || echo "No changes to commit"
+          git push origin master

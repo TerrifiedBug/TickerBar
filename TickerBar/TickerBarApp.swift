@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct TickerBarApp: App {
     @State private var stockService = StockService()
-    @State private var updateChecker = UpdateChecker()
+    @StateObject private var updateChecker = UpdateChecker()
 
     var body: some Scene {
         MenuBarExtra {
@@ -16,12 +16,8 @@ struct TickerBarApp: App {
     }
 
     init() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [stockService, updateChecker] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [stockService] in
             stockService.startTimers()
-            let autoCheck = UserDefaults.standard.object(forKey: "autoCheckForUpdates") as? Bool ?? true
-            if autoCheck {
-                Task { await updateChecker.checkForUpdates() }
-            }
         }
     }
 }
