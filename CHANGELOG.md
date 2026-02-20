@@ -4,6 +4,24 @@ All notable changes to TickerBar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-02-20
+
+### Added
+- Portfolio tracking with cost basis — track shares owned and average buy price per stock
+- Unified portfolio summary with automatic currency conversion to your chosen base currency
+- Base currency setting (USD, GBP, EUR, JPY, CAD, AUD, CHF) in Settings
+- Pre-market and after-hours prices via Yahoo Finance v7/quote API
+- 52-week high/low data
+- Rich tooltips on hover — day range, 52-week range, pre/post market prices, holdings details, market state
+- Briefcase icon on stocks with holdings
+- Holdings management in right-click context menu (add/edit/remove)
+- Exchange rate fetching via Yahoo Finance FX pairs (e.g. GBPUSD=X)
+
+### Fixed
+- GBX (pence) and ILA (agorot) sub-unit currencies now display correctly in pounds/shekels
+- Price alerts use correct display price for sub-unit currencies
+- Holdings cost basis defaults to correct display price for sub-unit stocks
+
 ## [1.1.1] - 2026-02-20
 
 ### Added
