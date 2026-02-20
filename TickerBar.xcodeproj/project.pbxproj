@@ -16,6 +16,7 @@
 		E6113DA9D465315DBE28C77F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DBDE6680A7FD9B348F4D20AA /* Assets.xcassets */; };
 		E9981276E1CF2B28C8109B2F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8B1157F816CFF9BBB9B3571 /* SettingsView.swift */; };
 		F856D70E249A413F0A4DE9CA /* StockItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15068B565FB4936419815470 /* StockItem.swift */; };
+		B2C3D4E5F607181920A1B2C3 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F60718192A1B2C3D4E5F67 /* UpdateChecker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -35,6 +36,7 @@
 		56838F3D7FDDA632BAD5C8F5 /* StockItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockItemTests.swift; sourceTree = "<group>"; };
 		5AAA7340F995D424D5754196 /* TickerBarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TickerBarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6DF1F4E796FC32743DAF80A0 /* StockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockService.swift; sourceTree = "<group>"; };
+		E5F60718192A1B2C3D4E5F67 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		ADFBB8F08EEDFB92601682F9 /* TickerBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TickerBarApp.swift; sourceTree = "<group>"; };
 		B1A9E9CC5D7EB971811810C9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DBDE6680A7FD9B348F4D20AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -72,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				6DF1F4E796FC32743DAF80A0 /* StockService.swift */,
+				E5F60718192A1B2C3D4E5F67 /* UpdateChecker.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -211,6 +214,7 @@
 				7404D19C7993CD33FB08B58D /* TickerBarApp.swift in Sources */,
 				8A834BC05313ED7089884EAA /* WatchlistView.swift in Sources */,
 				A1B2C3D4E5F60718192A3B4C /* MenuBarLabel.swift in Sources */,
+				B2C3D4E5F607181920A1B2C3 /* UpdateChecker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

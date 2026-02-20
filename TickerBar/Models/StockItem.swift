@@ -5,6 +5,7 @@ struct StockItem: Identifiable, Codable, Equatable {
     let name: String
     let price: Double
     let previousClose: Double
+    var exchangeTimezoneName: String? = nil
 
     var id: String { symbol }
 

@@ -2,12 +2,38 @@ import SwiftUI
 
 struct WatchlistView: View {
     @Bindable var service: StockService
+    var updateChecker: UpdateChecker
     @State private var newSymbol = ""
     @State private var showSettings = false
     @State private var addError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Update banner
+            if updateChecker.hasUpdate, let version = updateChecker.availableVersion {
+                HStack {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .foregroundStyle(.blue)
+                    Text("v\(version) available")
+                        .font(.caption)
+                    Spacer()
+                    if let url = updateChecker.downloadURL {
+                        Button("Download") { NSWorkspace.shared.open(url) }
+                            .buttonStyle(.plain)
+                            .font(.caption.bold())
+                            .foregroundStyle(.blue)
+                    }
+                    Button(action: { updateChecker.dismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.blue.opacity(0.1))
+            }
+
             // Header
             HStack {
                 Text("Watchlist")
@@ -30,11 +56,11 @@ struct WatchlistView: View {
             .padding(.bottom, 6)
 
             // Market status
-            if service.marketHoursOnly && !StockService.isMarketOpen() {
+            if service.marketHoursOnly && !service.anyMarketOpen {
                 HStack {
                     Image(systemName: "moon.fill")
                         .foregroundStyle(.secondary)
-                    Text("Market Closed")
+                    Text("Markets Closed")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

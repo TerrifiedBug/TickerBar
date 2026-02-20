@@ -97,10 +97,13 @@ final class StockService {
 
     // MARK: - Market Hours
 
-    nonisolated static func isMarketOpen(at date: Date = Date()) -> Bool {
+    /// Check if the exchange for a given timezone is open.
+    /// Uses the stock's exchangeTimezoneName from Yahoo Finance API.
+    nonisolated static func isMarketOpen(timezoneName: String? = nil, at date: Date = Date()) -> Bool {
+        let tzID = timezoneName ?? "America/New_York"
         var calendar = Calendar(identifier: .gregorian)
-        guard let et = TimeZone(identifier: "America/New_York") else { return true }
-        calendar.timeZone = et
+        guard let tz = TimeZone(identifier: tzID) else { return true }
+        calendar.timeZone = tz
 
         let weekday = calendar.component(.weekday, from: date)
         // 1 = Sunday, 7 = Saturday
@@ -110,10 +113,29 @@ final class StockService {
         let minute = calendar.component(.minute, from: date)
         let minuteOfDay = hour * 60 + minute
 
-        let marketOpen = 9 * 60 + 30  // 9:30 AM
-        let marketClose = 16 * 60     // 4:00 PM
+        // Approximate market hours for major exchanges (local time)
+        // US (NYSE/NASDAQ): 9:30-16:00, UK (LSE): 8:00-16:30,
+        // Europe: 9:00-17:30, Asia varies but ~9:00-15:00
+        let (marketOpen, marketClose): (Int, Int) = switch tzID {
+        case let tz where tz.starts(with: "Europe/London"):
+            (8 * 60, 16 * 60 + 30)       // LSE: 8:00-16:30
+        case let tz where tz.starts(with: "Europe/"):
+            (9 * 60, 17 * 60 + 30)       // EU: 9:00-17:30
+        case let tz where tz.starts(with: "Asia/Tokyo"):
+            (9 * 60, 15 * 60)            // TSE: 9:00-15:00
+        case let tz where tz.starts(with: "Asia/Hong_Kong"), let tz where tz.starts(with: "Asia/Shanghai"):
+            (9 * 60 + 30, 16 * 60)       // HKEX/SSE: 9:30-16:00
+        default:
+            (9 * 60 + 30, 16 * 60)       // US default: 9:30-16:00
+        }
 
         return minuteOfDay >= marketOpen && minuteOfDay < marketClose
+    }
+
+    /// Returns true if any stock in the watchlist has its market open
+    var anyMarketOpen: Bool {
+        if stocks.isEmpty { return Self.isMarketOpen() }
+        return stocks.contains { Self.isMarketOpen(timezoneName: $0.exchangeTimezoneName) }
     }
 
     // MARK: - Cookie + Crumb Authentication
@@ -157,9 +179,9 @@ final class StockService {
     // MARK: - Networking
 
     func fetchAllQuotes(isTimerTriggered: Bool = false) async {
-        // Only skip fetching for automatic timer refreshes during closed market.
+        // Only skip fetching for automatic timer refreshes when all markets are closed.
         // Manual refreshes, initial load, and add-stock fetches always proceed.
-        if isTimerTriggered && marketHoursOnly && !Self.isMarketOpen() {
+        if isTimerTriggered && marketHoursOnly && !anyMarketOpen {
             return
         }
 
@@ -244,8 +266,9 @@ final class StockService {
         let name = meta["longName"] as? String
             ?? meta["shortName"] as? String
             ?? symbol
+        let exchangeTZ = meta["exchangeTimezoneName"] as? String
 
-        return StockItem(symbol: symbol, name: name, price: price, previousClose: previousClose)
+        return StockItem(symbol: symbol, name: name, price: price, previousClose: previousClose, exchangeTimezoneName: exchangeTZ)
     }
 
     // MARK: - Watchlist Management
