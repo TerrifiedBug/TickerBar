@@ -3,14 +3,14 @@
   <channel>
     <title>TickerBar Updates</title>
     <item>
-      <title>Version 1.0.1</title>
-      <sparkle:version>1.0.1</sparkle:version>
-      <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
-      <pubDate>Fri, 20 Feb 2026 11:01:32 +0000</pubDate>
+      <title>Version 1.0.2</title>
+      <sparkle:version>1.0.2</sparkle:version>
+      <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
+      <pubDate>Fri, 20 Feb 2026 11:18:24 +0000</pubDate>
       <enclosure
-        url="https://github.com/TerrifiedBug/TickerBar/releases/download/v1.0.1/TickerBar.zip"
-        sparkle:edSignature="DYZV9qnvSJO8b7/T8gYxcv3lNmvE9KGyTElifaaGlg1a1RpdWsMFJHGIDj6vnMsFfcCA3tEgVRxYr1b602beBg=="
-        length="1205092"
+        url="https://github.com/TerrifiedBug/TickerBar/releases/download/v1.0.2/TickerBar.zip"
+        sparkle:edSignature="1Rwh+dwmFmRw5z0ql6zcA7fJk4DjNfUqP4ylMzeZU6d3XmGbqsEWRwceVImQfgjqkKP5q1IbUFRSdyDksgVNAw=="
+        length="1205090"
         type="application/octet-stream" />
     </item>
   </channel>
