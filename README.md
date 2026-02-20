@@ -24,7 +24,8 @@
 ### Homebrew (recommended)
 
 ```bash
-brew install TerrifiedBug/tickerbar/tickerbar
+brew tap TerrifiedBug/tickerbar
+brew install tickerbar
 ```
 
 Update with `brew upgrade tickerbar`.
