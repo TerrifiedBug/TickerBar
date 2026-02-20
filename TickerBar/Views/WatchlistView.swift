@@ -12,6 +12,9 @@ struct WatchlistView: View {
     @State private var alertSymbol: String?
     @State private var alertPriceText = ""
     @State private var alertIsAbove = true
+    @State private var holdingsSymbol: String?
+    @State private var holdingsSharesText = ""
+    @State private var holdingsCostText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -63,6 +66,24 @@ struct WatchlistView: View {
                     .padding(.bottom, 4)
             }
 
+            // Portfolio summary (converted to base currency)
+            if service.totalPortfolioValue > 0 {
+                HStack {
+                    Image(systemName: "chart.pie.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(service.baseCurrencySymbol)\(String(format: "%.0f", service.totalPortfolioValue))")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                    Text(String(format: "%@%+.0f (%.1f%%)", service.baseCurrencySymbol, service.totalPortfolioGain, service.totalPortfolioGainPercent))
+                        .font(.caption)
+                        .foregroundStyle(service.totalPortfolioGain >= 0 ? .green : .red)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 2)
+            }
+
             Divider()
 
             // Stock list
@@ -72,7 +93,7 @@ struct WatchlistView: View {
                     .padding(12)
             } else {
                 ForEach(Array(service.stocks.enumerated()), id: \.element.id) { index, stock in
-                    StockRowView(stock: stock, hasAlert: !service.alertsForSymbol(stock.symbol).isEmpty)
+                    StockRowView(stock: stock, hasAlert: !service.alertsForSymbol(stock.symbol).isEmpty, holding: service.holdingFor(stock.symbol))
                         .onTapGesture {
                             openYahooFinance(symbol: stock.symbol)
                         }
@@ -91,7 +112,7 @@ struct WatchlistView: View {
                             Divider()
 
                             Button("Set Price Alert...") {
-                                alertPriceText = String(format: "%.2f", stock.price)
+                                alertPriceText = String(format: "%.2f", stock.displayPrice)
                                 alertIsAbove = true
                                 alertSymbol = stock.symbol
                             }
@@ -103,6 +124,20 @@ struct WatchlistView: View {
                                     Button("Remove: \(alert.directionLabel) \(stock.currencySymbol)\(String(format: "%.2f", alert.targetPrice))") {
                                         service.removeAlert(alert)
                                     }
+                                }
+                            }
+
+                            Divider()
+
+                            let holding = service.holdingFor(stock.symbol)
+                            Button(holding != nil ? "Edit Holdings (\(String(format: "%.2f", holding!.shares)) shares)..." : "Add Holdings...") {
+                                holdingsSharesText = holding != nil ? String(format: "%.2f", holding!.shares) : ""
+                                holdingsCostText = holding != nil ? String(format: "%.2f", holding!.costBasis) : String(format: "%.2f", stock.displayPrice)
+                                holdingsSymbol = stock.symbol
+                            }
+                            if holding != nil {
+                                Button("Remove Holdings") {
+                                    service.setHolding(symbol: stock.symbol, shares: 0, costBasis: 0)
                                 }
                             }
 
@@ -150,6 +185,79 @@ struct WatchlistView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(.background.opacity(0.5))
+            }
+
+            // Holdings input
+            if let symbol = holdingsSymbol {
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Holdings for \(symbol)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Button(action: { holdingsSymbol = nil }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    HStack(spacing: 6) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Shares")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            TextField("0", text: $holdingsSharesText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 80)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Avg Cost")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            TextField("0.00", text: $holdingsCostText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 80)
+                        }
+                        Spacer()
+                        VStack(spacing: 2) {
+                            Text(" ")
+                                .font(.caption2)
+                            Button("Save") {
+                                if let shares = Double(holdingsSharesText),
+                                   let cost = Double(holdingsCostText) {
+                                    service.setHolding(symbol: symbol, shares: shares, costBasis: cost)
+                                }
+                                holdingsSymbol = nil
+                            }
+                            .disabled(Double(holdingsSharesText) == nil || Double(holdingsCostText) == nil)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.background.opacity(0.5))
+            }
+
+            // Notification warning
+            if let warning = service.notificationWarning {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.caption)
+                    Text(warning)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Open Settings") {
+                        service.openNotificationSettings()
+                    }
+                    .font(.caption2)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.blue)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.yellow.opacity(0.1))
             }
 
             Divider()
@@ -305,6 +413,35 @@ struct WatchlistView: View {
 struct StockRowView: View {
     let stock: StockItem
     var hasAlert: Bool = false
+    var holding: StockService.Holding? = nil
+
+    private var tooltipText: String {
+        var lines: [String] = []
+        let cs = stock.currencySymbol
+
+        if let high = stock.displayDayHigh, let low = stock.displayDayLow {
+            lines.append("Day: \(cs)\(String(format: "%.2f", low)) - \(cs)\(String(format: "%.2f", high))")
+        }
+        if let h52 = stock.display52WeekHigh, let l52 = stock.display52WeekLow {
+            lines.append("52w: \(cs)\(String(format: "%.2f", l52)) - \(cs)\(String(format: "%.2f", h52))")
+        }
+        if let ahPrice = stock.displayPostMarketPrice, let ahChange = stock.displayPostMarketChange {
+            lines.append("After Hours: \(cs)\(String(format: "%.2f", ahPrice)) (\(String(format: "%+.2f", ahChange)))")
+        }
+        if let pmPrice = stock.displayPreMarketPrice, let pmChange = stock.displayPreMarketChange {
+            lines.append("Pre-Market: \(cs)\(String(format: "%.2f", pmPrice)) (\(String(format: "%+.2f", pmChange)))")
+        }
+        if let h = holding {
+            let value = stock.displayPrice * h.shares
+            let gain = (stock.displayPrice - h.costBasis) * h.shares
+            lines.append("\(String(format: "%.2f", h.shares)) shares @ \(cs)\(String(format: "%.2f", h.costBasis)) = \(cs)\(String(format: "%.2f", value)) (\(String(format: "%+.2f", gain)))")
+        }
+        if let state = stock.marketState {
+            lines.append("Market: \(state)")
+        }
+
+        return lines.isEmpty ? stock.name : lines.joined(separator: "\n")
+    }
 
     var body: some View {
         HStack {
@@ -316,6 +453,11 @@ struct StockRowView: View {
                         Image(systemName: "bell.fill")
                             .font(.caption2)
                             .foregroundStyle(.orange)
+                    }
+                    if holding != nil {
+                        Image(systemName: "briefcase.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                     if !StockService.isMarketOpen(timezoneName: stock.exchangeTimezoneName) {
                         Image(systemName: "moon.fill")
@@ -337,13 +479,13 @@ struct StockRowView: View {
             }
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text("\(stock.currencySymbol)\(String(format: "%.2f", stock.price))")
+                Text("\(stock.currencySymbol)\(String(format: "%.2f", stock.displayPrice))")
                     .font(.system(.body, design: .monospaced))
 
                 HStack(spacing: 2) {
                     Image(systemName: stock.isPositive ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
                         .font(.caption2)
-                    Text(String(format: "%.2f (%.1f%%)", abs(stock.change), abs(stock.changePercent)))
+                    Text(String(format: "%.2f (%.1f%%)", abs(stock.displayChange), abs(stock.changePercent)))
                         .font(.caption)
                 }
                 .foregroundStyle(stock.isPositive ? .green : .red)
@@ -352,6 +494,7 @@ struct StockRowView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .contentShape(Rectangle())
+        .help(tooltipText)
     }
 }
 

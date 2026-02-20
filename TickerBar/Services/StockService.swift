@@ -37,6 +37,28 @@ final class StockService {
     var compactMenuBar: Bool {
         didSet { UserDefaults.standard.set(compactMenuBar, forKey: "compactMenuBar") }
     }
+    var baseCurrency: String {
+        didSet { UserDefaults.standard.set(baseCurrency, forKey: "baseCurrency") }
+    }
+
+    // MARK: - Exchange Rates (e.g. "GBP" -> 1.27 means 1 GBP = 1.27 base currency units)
+    var exchangeRates: [String: Double] = [:]
+
+    static let supportedBaseCurrencies = ["USD", "GBP", "EUR", "JPY", "CAD", "AUD", "CHF"]
+
+    // MARK: - Portfolio Holdings
+    struct Holding: Codable, Equatable {
+        var shares: Double
+        var costBasis: Double  // average price per share
+    }
+
+    var holdings: [String: Holding] = [:] {
+        didSet {
+            if let data = try? JSONEncoder().encode(holdings) {
+                UserDefaults.standard.set(data, forKey: "holdings")
+            }
+        }
+    }
 
     // MARK: - Price Alerts
     var priceAlerts: [PriceAlert] = [] {
@@ -82,10 +104,16 @@ final class StockService {
         self.marketHoursOnly = defaults.object(forKey: "marketHoursOnly") as? Bool ?? true
         self.showPercentChange = defaults.object(forKey: "showPercentChange") as? Bool ?? true
         self.compactMenuBar = defaults.object(forKey: "compactMenuBar") as? Bool ?? false
+        self.baseCurrency = defaults.string(forKey: "baseCurrency") ?? "USD"
 
         if let alertData = defaults.data(forKey: "priceAlerts"),
            let savedAlerts = try? JSONDecoder().decode([PriceAlert].self, from: alertData) {
             self.priceAlerts = savedAlerts
+        }
+
+        if let holdingsData = defaults.data(forKey: "holdings"),
+           let savedHoldings = try? JSONDecoder().decode([String: Holding].self, from: holdingsData) {
+            self.holdings = savedHoldings
         }
     }
 
@@ -255,9 +283,52 @@ final class StockService {
             return results
         }
 
+        // Fetch v7 quote data for pre/post market prices (single batch call)
+        var enriched = fetched
+        if let crumbValue, !symbols.isEmpty {
+            let v7Data = await Self.fetchV7Quotes(symbols: symbols, crumb: crumbValue)
+            for i in enriched.indices {
+                if let extra = v7Data[enriched[i].symbol] {
+                    enriched[i].postMarketPrice = extra.postMarketPrice
+                    enriched[i].postMarketChange = extra.postMarketChange
+                    enriched[i].preMarketPrice = extra.preMarketPrice
+                    enriched[i].preMarketChange = extra.preMarketChange
+                    enriched[i].marketState = extra.marketState
+                    enriched[i].fiftyTwoWeekHigh = extra.fiftyTwoWeekHigh
+                    enriched[i].fiftyTwoWeekLow = extra.fiftyTwoWeekLow
+                }
+            }
+        }
+
+        // Fetch exchange rates for portfolio currency conversion
+        if let crumbValue, !holdings.isEmpty {
+            let currencies = Set(enriched.compactMap { stock -> String? in
+                guard holdings[stock.symbol] != nil else { return nil }
+                // Normalize sub-unit currencies to their major unit
+                let raw = stock.currency ?? "USD"
+                if raw == "GBp" || raw.uppercased() == "GBX" { return "GBP" }
+                if raw == "ILA" { return "ILS" }
+                return raw.uppercased()
+            })
+            let neededRates = currencies.filter { $0 != baseCurrency }
+            if !neededRates.isEmpty {
+                let rateSymbols = neededRates.map { "\($0)\(baseCurrency)=X" }
+                let rates = await Self.fetchExchangeRates(symbols: Array(rateSymbols), crumb: crumbValue)
+                for (pair, rate) in rates {
+                    // Extract source currency from "GBPUSD=X" -> "GBP"
+                    let source = String(pair.prefix(3))
+                    exchangeRates[source] = rate
+                }
+                // Base currency to itself is always 1
+                exchangeRates[baseCurrency] = 1.0
+            } else {
+                exchangeRates = [baseCurrency: 1.0]
+            }
+        }
+
         // Sort to match watchlist order
         stocks = watchlist.compactMap { symbol in
-            fetched.first { $0.symbol == symbol }
+            enriched.first { $0.symbol == symbol }
         }
 
         lastUpdated = Date()
@@ -318,7 +389,89 @@ final class StockService {
             intradayPrices = closes.compactMap { $0 as? Double }
         }
 
-        return StockItem(symbol: symbol, name: name, price: price, previousClose: previousClose, exchangeTimezoneName: exchangeTZ, currency: currency, intradayPrices: intradayPrices)
+        // Day high/low from meta
+        let dayHigh = meta["regularMarketDayHigh"] as? Double
+        let dayLow = meta["regularMarketDayLow"] as? Double
+
+        return StockItem(symbol: symbol, name: name, price: price, previousClose: previousClose, exchangeTimezoneName: exchangeTZ, currency: currency, intradayPrices: intradayPrices, dayHigh: dayHigh, dayLow: dayLow)
+    }
+
+    // MARK: - V7 Quote (pre/post market, market state)
+
+    struct V7QuoteData {
+        var postMarketPrice: Double?
+        var postMarketChange: Double?
+        var preMarketPrice: Double?
+        var preMarketChange: Double?
+        var marketState: String?
+        var fiftyTwoWeekHigh: Double?
+        var fiftyTwoWeekLow: Double?
+    }
+
+    /// Batch fetch v7 quote data for all symbols (single HTTP call).
+    private nonisolated static func fetchV7Quotes(symbols: [String], crumb: String) async -> [String: V7QuoteData] {
+        let joined = symbols.joined(separator: ",")
+        let urlString = "\(baseURL)/v7/finance/quote?symbols=\(joined)&formatted=false&crumb=\(crumb)"
+        guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString) else { return [:] }
+
+        do {
+            let (data, response) = try await session.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else { return [:] }
+
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let quoteResponse = json?["quoteResponse"] as? [String: Any],
+                  let results = quoteResponse["result"] as? [[String: Any]] else { return [:] }
+
+            var dict: [String: V7QuoteData] = [:]
+            for quote in results {
+                guard let symbol = quote["symbol"] as? String else { continue }
+                dict[symbol] = V7QuoteData(
+                    postMarketPrice: quote["postMarketPrice"] as? Double,
+                    postMarketChange: quote["postMarketChange"] as? Double,
+                    preMarketPrice: quote["preMarketPrice"] as? Double,
+                    preMarketChange: quote["preMarketChange"] as? Double,
+                    marketState: quote["marketState"] as? String,
+                    fiftyTwoWeekHigh: quote["fiftyTwoWeekHigh"] as? Double,
+                    fiftyTwoWeekLow: quote["fiftyTwoWeekLow"] as? Double
+                )
+            }
+            return dict
+        } catch {
+            return [:]
+        }
+    }
+
+    // MARK: - Exchange Rates
+
+    /// Fetch exchange rates via v7/quote (e.g. symbols = ["GBPUSD=X", "EURUSD=X"])
+    private nonisolated static func fetchExchangeRates(symbols: [String], crumb: String) async -> [String: Double] {
+        let joined = symbols.joined(separator: ",")
+        let urlString = "\(baseURL)/v7/finance/quote?symbols=\(joined)&formatted=false&crumb=\(crumb)"
+        guard let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: encoded) else { return [:] }
+
+        do {
+            let (data, response) = try await session.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else { return [:] }
+
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let quoteResponse = json?["quoteResponse"] as? [String: Any],
+                  let results = quoteResponse["result"] as? [[String: Any]] else { return [:] }
+
+            var rates: [String: Double] = [:]
+            for quote in results {
+                guard let symbol = quote["symbol"] as? String,
+                      let price = quote["regularMarketPrice"] as? Double else { continue }
+                // Symbol is like "GBPUSD=X", we store "GBP" -> rate
+                let source = String(symbol.prefix(3))
+                rates[source] = price
+            }
+            return rates
+        } catch {
+            return [:]
+        }
     }
 
     // MARK: - Watchlist Management
@@ -348,6 +501,7 @@ final class StockService {
         watchlist.removeAll { $0 == symbol }
         stocks.removeAll { $0.symbol == symbol }
         priceAlerts.removeAll { $0.symbol == symbol }
+        holdings.removeValue(forKey: symbol)
     }
 
     func moveSymbol(from source: Int, to destination: Int) {
@@ -361,6 +515,8 @@ final class StockService {
 
     // MARK: - Price Alert Management
 
+    var notificationWarning: String?
+
     func addAlert(symbol: String, targetPrice: Double, isAbove: Bool) {
         let alert = PriceAlert(symbol: symbol, targetPrice: targetPrice, isAbove: isAbove)
         priceAlerts.append(alert)
@@ -368,31 +524,24 @@ final class StockService {
     }
 
     private func ensureNotificationPermission() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
+        Task {
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
             switch settings.authorizationStatus {
             case .notDetermined:
-                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+                _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
             case .denied:
-                DispatchQueue.main.async {
-                    self.showNotificationPermissionAlert()
-                }
+                notificationWarning = "Notifications are disabled. Enable in System Settings > Notifications > TickerBar."
             default:
-                break
+                notificationWarning = nil
             }
         }
     }
 
-    private func showNotificationPermissionAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Notifications Disabled"
-        alert.informativeText = "Price alerts require notifications to be enabled. Open System Settings to allow notifications for TickerBar."
-        alert.addButton(withTitle: "Open Settings")
-        alert.addButton(withTitle: "Later")
-        if alert.runModal() == .alertFirstButtonReturn {
-            if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
-                NSWorkspace.shared.open(url)
-            }
+    func openNotificationSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
+            NSWorkspace.shared.open(url)
         }
+        notificationWarning = nil
     }
 
     func removeAlert(_ alert: PriceAlert) {
@@ -415,9 +564,9 @@ final class StockService {
                 continue
             }
 
-            if priceAlerts[i].isTriggered(currentPrice: stock.price) {
+            if priceAlerts[i].isTriggered(currentPrice: stock.displayPrice) {
                 triggeredAlertIDs.insert(priceAlerts[i].id)
-                sendAlertNotification(alert: priceAlerts[i], currentPrice: stock.price, currency: stock.currencySymbol)
+                sendAlertNotification(alert: priceAlerts[i], currentPrice: stock.displayPrice, currency: stock.currencySymbol)
             }
         }
 
@@ -434,6 +583,69 @@ final class StockService {
 
         let request = UNNotificationRequest(identifier: alert.id.uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
+    }
+
+    // MARK: - Portfolio Management
+
+    func setHolding(symbol: String, shares: Double, costBasis: Double) {
+        if shares > 0 {
+            holdings[symbol] = Holding(shares: shares, costBasis: costBasis)
+        } else {
+            holdings.removeValue(forKey: symbol)
+        }
+    }
+
+    func holdingFor(_ symbol: String) -> Holding? {
+        holdings[symbol]
+    }
+
+    /// Get the normalized major-unit currency code for a stock (GBp/GBX -> GBP, ILA -> ILS)
+    private func normalizedCurrency(for stock: StockItem) -> String {
+        let raw = stock.currency ?? "USD"
+        if raw == "GBp" || raw.uppercased() == "GBX" { return "GBP" }
+        if raw == "ILA" { return "ILS" }
+        return raw.uppercased()
+    }
+
+    /// Exchange rate from a stock's currency to baseCurrency. Returns 1.0 if same or unknown.
+    private func rateToBase(for stock: StockItem) -> Double {
+        let cur = normalizedCurrency(for: stock)
+        if cur == baseCurrency { return 1.0 }
+        return exchangeRates[cur] ?? 1.0
+    }
+
+    var totalPortfolioValue: Double {
+        stocks.reduce(0) { total, stock in
+            guard let h = holdings[stock.symbol] else { return total }
+            return total + stock.displayPrice * h.shares * rateToBase(for: stock)
+        }
+    }
+
+    var totalPortfolioCost: Double {
+        stocks.reduce(0) { total, stock in
+            guard let h = holdings[stock.symbol] else { return total }
+            return total + h.costBasis * h.shares * rateToBase(for: stock)
+        }
+    }
+
+    var totalPortfolioGain: Double {
+        totalPortfolioValue - totalPortfolioCost
+    }
+
+    var totalPortfolioGainPercent: Double {
+        totalPortfolioCost > 0 ? (totalPortfolioGain / totalPortfolioCost) * 100 : 0
+    }
+
+    var baseCurrencySymbol: String {
+        switch baseCurrency {
+        case "GBP": return "£"
+        case "EUR": return "€"
+        case "JPY": return "¥"
+        case "CAD": return "C$"
+        case "AUD": return "A$"
+        case "CHF": return "CHF "
+        default: return "$"
+        }
     }
 
     // MARK: - Symbol Search

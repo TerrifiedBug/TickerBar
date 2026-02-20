@@ -68,6 +68,19 @@ struct SettingsView: View {
             // Show percent change in menu bar
             Toggle("Show % change in menu bar", isOn: $service.showPercentChange)
 
+            // Base currency for portfolio
+            HStack {
+                Text("Portfolio currency")
+                Spacer()
+                Picker("", selection: $service.baseCurrency) {
+                    ForEach(StockService.supportedBaseCurrencies, id: \.self) { currency in
+                        Text(currency).tag(currency)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 100)
+            }
+
             // Launch at login
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, newValue in

@@ -43,7 +43,7 @@ struct MenuBarLabel: View {
 
         // Build line 2: price + arrow (+ optional percent)
         let line2 = NSMutableAttributedString()
-        line2.append(NSAttributedString(string: "\(stock.currencySymbol)\(String(format: "%.2f", stock.price))", attributes: [
+        line2.append(NSAttributedString(string: "\(stock.currencySymbol)\(String(format: "%.2f", stock.displayPrice))", attributes: [
             .font: priceFont,
             .foregroundColor: textColor
         ]))
@@ -106,7 +106,7 @@ struct MenuBarLabel: View {
             .font: symbolFont,
             .foregroundColor: textColor
         ]))
-        str.append(NSAttributedString(string: " \(stock.currencySymbol)\(String(format: "%.2f", stock.price))", attributes: [
+        str.append(NSAttributedString(string: " \(stock.currencySymbol)\(String(format: "%.2f", stock.displayPrice))", attributes: [
             .font: priceFont,
             .foregroundColor: textColor
         ]))
