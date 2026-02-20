@@ -9,6 +9,9 @@ struct WatchlistView: View {
     @State private var isValidating = false
     @State private var searchResults: [StockService.SymbolSearchResult] = []
     @State private var searchTask: Task<Void, Never>?
+    @State private var alertSymbol: String?
+    @State private var alertPriceText = ""
+    @State private var alertIsAbove = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -16,6 +19,11 @@ struct WatchlistView: View {
             HStack {
                 Text("Watchlist")
                     .font(.headline)
+                if let lastUpdated = service.lastUpdated {
+                    Text(lastUpdated.formatted(date: .omitted, time: .shortened))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
                 Spacer()
                 if service.isLoading {
                     ProgressView()
@@ -63,17 +71,85 @@ struct WatchlistView: View {
                     .foregroundStyle(.secondary)
                     .padding(12)
             } else {
-                ForEach(service.stocks) { stock in
-                    StockRowView(stock: stock)
+                ForEach(Array(service.stocks.enumerated()), id: \.element.id) { index, stock in
+                    StockRowView(stock: stock, hasAlert: !service.alertsForSymbol(stock.symbol).isEmpty)
                         .onTapGesture {
                             openYahooFinance(symbol: stock.symbol)
                         }
                         .contextMenu {
+                            if index > 0 {
+                                Button("Move Up") {
+                                    withAnimation { service.moveSymbol(from: index, to: index - 1) }
+                                }
+                            }
+                            if index < service.stocks.count - 1 {
+                                Button("Move Down") {
+                                    withAnimation { service.moveSymbol(from: index, to: index + 1) }
+                                }
+                            }
+
+                            Divider()
+
+                            Button("Set Price Alert...") {
+                                alertPriceText = String(format: "%.2f", stock.price)
+                                alertIsAbove = true
+                                alertSymbol = stock.symbol
+                            }
+
+                            let alerts = service.alertsForSymbol(stock.symbol)
+                            if !alerts.isEmpty {
+                                Divider()
+                                ForEach(alerts) { alert in
+                                    Button("Remove: \(alert.directionLabel) \(stock.currencySymbol)\(String(format: "%.2f", alert.targetPrice))") {
+                                        service.removeAlert(alert)
+                                    }
+                                }
+                            }
+
+                            Divider()
                             Button("Remove \(stock.symbol)") {
                                 service.removeSymbol(stock.symbol)
                             }
                         }
                 }
+            }
+
+            // Price alert input
+            if let symbol = alertSymbol {
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Alert for \(symbol)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Button(action: { alertSymbol = nil }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    HStack(spacing: 8) {
+                        Picker("", selection: $alertIsAbove) {
+                            Text("Above").tag(true)
+                            Text("Below").tag(false)
+                        }
+                        .labelsHidden()
+                        .frame(width: 70)
+                        TextField("Price", text: $alertPriceText)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                        Button("Set") {
+                            if let price = Double(alertPriceText) {
+                                service.addAlert(symbol: symbol, targetPrice: price, isAbove: alertIsAbove)
+                                alertSymbol = nil
+                            }
+                        }
+                        .disabled(Double(alertPriceText) == nil)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.background.opacity(0.5))
             }
 
             Divider()
@@ -152,15 +228,6 @@ struct WatchlistView: View {
 
             Divider()
 
-            // Last updated
-            if let lastUpdated = service.lastUpdated {
-                Text("Updated \(lastUpdated.formatted(date: .omitted, time: .shortened))")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 4)
-            }
-
             // Bottom bar
             HStack {
                 Button(action: { showSettings.toggle() }) {
@@ -237,12 +304,25 @@ struct WatchlistView: View {
 
 struct StockRowView: View {
     let stock: StockItem
+    var hasAlert: Bool = false
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(stock.symbol)
-                    .font(.system(.body, design: .monospaced, weight: .semibold))
+                HStack(spacing: 4) {
+                    Text(stock.symbol)
+                        .font(.system(.body, design: .monospaced, weight: .semibold))
+                    if hasAlert {
+                        Image(systemName: "bell.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
+                    if !StockService.isMarketOpen(timezoneName: stock.exchangeTimezoneName) {
+                        Image(systemName: "moon.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Text(stock.name)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -250,6 +330,11 @@ struct StockRowView: View {
             }
 
             Spacer()
+
+            if stock.intradayPrices.count >= 2 {
+                SparklineView(prices: stock.intradayPrices, isPositive: stock.isPositive)
+                    .frame(width: 50, height: 20)
+            }
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(stock.currencySymbol)\(String(format: "%.2f", stock.price))")
@@ -269,3 +354,4 @@ struct StockRowView: View {
         .contentShape(Rectangle())
     }
 }
+

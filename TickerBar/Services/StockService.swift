@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UserNotifications
 
 @MainActor
 @Observable
@@ -37,6 +38,15 @@ final class StockService {
         didSet { UserDefaults.standard.set(compactMenuBar, forKey: "compactMenuBar") }
     }
 
+    // MARK: - Price Alerts
+    var priceAlerts: [PriceAlert] = [] {
+        didSet {
+            if let data = try? JSONEncoder().encode(priceAlerts) {
+                UserDefaults.standard.set(data, forKey: "priceAlerts")
+            }
+        }
+    }
+
     // MARK: - Timers
     private var refreshTimer: Timer?
     private var rotationTimer: Timer?
@@ -72,6 +82,11 @@ final class StockService {
         self.marketHoursOnly = defaults.object(forKey: "marketHoursOnly") as? Bool ?? true
         self.showPercentChange = defaults.object(forKey: "showPercentChange") as? Bool ?? true
         self.compactMenuBar = defaults.object(forKey: "compactMenuBar") as? Bool ?? false
+
+        if let alertData = defaults.data(forKey: "priceAlerts"),
+           let savedAlerts = try? JSONDecoder().decode([PriceAlert].self, from: alertData) {
+            self.priceAlerts = savedAlerts
+        }
     }
 
     // MARK: - Display
@@ -79,8 +94,14 @@ final class StockService {
     var currentDisplayStock: StockItem? {
         guard !stocks.isEmpty else { return nil }
         if rotationEnabled {
-            let index = currentDisplayIndex % stocks.count
-            return stocks[index]
+            let current = stocks[currentDisplayIndex % stocks.count]
+            // If current stock's market is closed, prefer an open one (unless all are closed)
+            if !Self.isMarketOpen(timezoneName: current.exchangeTimezoneName) {
+                if let openStock = stocks.first(where: { Self.isMarketOpen(timezoneName: $0.exchangeTimezoneName) }) {
+                    return openStock
+                }
+            }
+            return current
         } else {
             return stocks.first { $0.symbol == pinnedSymbol } ?? stocks.first
         }
@@ -92,7 +113,25 @@ final class StockService {
 
     func advanceDisplay() {
         guard !stocks.isEmpty, rotationEnabled else { return }
-        currentDisplayIndex = (currentDisplayIndex + 1) % stocks.count
+
+        let openStocks = stocks.enumerated().filter {
+            Self.isMarketOpen(timezoneName: $0.element.exchangeTimezoneName)
+        }
+
+        if openStocks.isEmpty {
+            // All markets closed — rotate through everything
+            currentDisplayIndex = (currentDisplayIndex + 1) % stocks.count
+        } else {
+            // Find the next open stock after current index
+            let startIndex = currentDisplayIndex
+            for offset in 1...stocks.count {
+                let candidate = (startIndex + offset) % stocks.count
+                if Self.isMarketOpen(timezoneName: stocks[candidate].exchangeTimezoneName) {
+                    currentDisplayIndex = candidate
+                    return
+                }
+            }
+        }
     }
 
     // MARK: - Market Hours
@@ -223,6 +262,7 @@ final class StockService {
 
         lastUpdated = Date()
         isLoading = false
+        checkPriceAlerts()
 
         if fetched.isEmpty && !watchlist.isEmpty {
             errorMessage = "Unable to fetch quotes"
@@ -233,7 +273,7 @@ final class StockService {
 
     private nonisolated static func fetchQuote(for symbol: String, crumb: String?) async -> StockItem? {
         guard let crumb else { return nil }
-        let urlString = "\(baseURL)/v8/finance/chart/\(symbol)?interval=1d&range=1d&crumb=\(crumb)"
+        let urlString = "\(baseURL)/v8/finance/chart/\(symbol)?interval=5m&range=1d&crumb=\(crumb)"
         guard let url = URL(string: urlString) else { return nil }
 
         do {
@@ -269,7 +309,16 @@ final class StockService {
         let exchangeTZ = meta["exchangeTimezoneName"] as? String
         let currency = meta["currency"] as? String
 
-        return StockItem(symbol: symbol, name: name, price: price, previousClose: previousClose, exchangeTimezoneName: exchangeTZ, currency: currency)
+        // Parse intraday close prices for sparkline
+        var intradayPrices: [Double] = []
+        if let indicators = result["indicators"] as? [String: Any],
+           let quotes = indicators["quote"] as? [[String: Any]],
+           let quote = quotes.first,
+           let closes = quote["close"] as? [Any] {
+            intradayPrices = closes.compactMap { $0 as? Double }
+        }
+
+        return StockItem(symbol: symbol, name: name, price: price, previousClose: previousClose, exchangeTimezoneName: exchangeTZ, currency: currency, intradayPrices: intradayPrices)
     }
 
     // MARK: - Watchlist Management
@@ -298,6 +347,93 @@ final class StockService {
     func removeSymbol(_ symbol: String) {
         watchlist.removeAll { $0 == symbol }
         stocks.removeAll { $0.symbol == symbol }
+        priceAlerts.removeAll { $0.symbol == symbol }
+    }
+
+    func moveSymbol(from source: Int, to destination: Int) {
+        let symbol = watchlist.remove(at: source)
+        watchlist.insert(symbol, at: destination)
+        // Re-sort stocks to match new watchlist order
+        stocks = watchlist.compactMap { sym in
+            stocks.first { $0.symbol == sym }
+        }
+    }
+
+    // MARK: - Price Alert Management
+
+    func addAlert(symbol: String, targetPrice: Double, isAbove: Bool) {
+        let alert = PriceAlert(symbol: symbol, targetPrice: targetPrice, isAbove: isAbove)
+        priceAlerts.append(alert)
+        ensureNotificationPermission()
+    }
+
+    private func ensureNotificationPermission() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+            case .denied:
+                DispatchQueue.main.async {
+                    self.showNotificationPermissionAlert()
+                }
+            default:
+                break
+            }
+        }
+    }
+
+    private func showNotificationPermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Notifications Disabled"
+        alert.informativeText = "Price alerts require notifications to be enabled. Open System Settings to allow notifications for TickerBar."
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
+    func removeAlert(_ alert: PriceAlert) {
+        priceAlerts.removeAll { $0.id == alert.id }
+    }
+
+    func alertsForSymbol(_ symbol: String) -> [PriceAlert] {
+        priceAlerts.filter { $0.symbol == symbol }
+    }
+
+    private func checkPriceAlerts() {
+        var triggeredAlertIDs: Set<UUID> = []
+
+        for i in priceAlerts.indices {
+            guard let stock = stocks.first(where: { $0.symbol == priceAlerts[i].symbol }) else { continue }
+
+            if !priceAlerts[i].armed {
+                // Arm on first check — skips the fetch cycle where alert was created
+                priceAlerts[i].armed = true
+                continue
+            }
+
+            if priceAlerts[i].isTriggered(currentPrice: stock.price) {
+                triggeredAlertIDs.insert(priceAlerts[i].id)
+                sendAlertNotification(alert: priceAlerts[i], currentPrice: stock.price, currency: stock.currencySymbol)
+            }
+        }
+
+        if !triggeredAlertIDs.isEmpty {
+            priceAlerts.removeAll { triggeredAlertIDs.contains($0.id) }
+        }
+    }
+
+    private func sendAlertNotification(alert: PriceAlert, currentPrice: Double, currency: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "\(alert.symbol) Price Alert"
+        content.body = "\(alert.symbol) is now \(currency)\(String(format: "%.2f", currentPrice)), \(alert.directionLabel) your target of \(currency)\(String(format: "%.2f", alert.targetPrice))"
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: alert.id.uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 
     // MARK: - Symbol Search

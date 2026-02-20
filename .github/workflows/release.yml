@@ -86,11 +86,23 @@ jobs:
           </rss>
           XMLEOF
 
+      - name: Extract release notes from CHANGELOG
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          # Extract the section for this version from CHANGELOG.md
+          # Falls back to auto-generated notes if version not found
+          awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "See [CHANGELOG.md](https://github.com/TerrifiedBug/TickerBar/blob/master/CHANGELOG.md) for details." > release_notes.md
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: build/Build/Products/Release/TickerBar.zip
-          generate_release_notes: true
+          body_path: release_notes.md
 
       - name: Commit appcast.xml
         env:

@@ -1,7 +1,9 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct TickerBarApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var stockService = StockService()
     @StateObject private var updateChecker = UpdateChecker()
 
@@ -19,5 +21,20 @@ struct TickerBarApp: App {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [stockService] in
             stockService.startTimers()
         }
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    // Show notifications even when app is in foreground
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
     }
 }

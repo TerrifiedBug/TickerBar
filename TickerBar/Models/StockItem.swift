@@ -7,6 +7,7 @@ struct StockItem: Identifiable, Codable, Equatable {
     let previousClose: Double
     var exchangeTimezoneName: String? = nil
     var currency: String? = nil
+    var intradayPrices: [Double] = []
 
     var id: String { symbol }
 

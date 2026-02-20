@@ -17,6 +17,8 @@
 		E9981276E1CF2B28C8109B2F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8B1157F816CFF9BBB9B3571 /* SettingsView.swift */; };
 		F856D70E249A413F0A4DE9CA /* StockItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15068B565FB4936419815470 /* StockItem.swift */; };
 		B2C3D4E5F607181920A1B2C3 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F60718192A1B2C3D4E5F67 /* UpdateChecker.swift */; };
+		C1D2E3F4A5B6C7D8E9F0A1B3 /* SparklineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B2 /* SparklineView.swift */; };
+		D1E2F3A4B5C6D7E8F9A0B1C2 /* PriceAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C6D7E8F9A0B1C3 /* PriceAlert.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -41,6 +43,8 @@
 		B1A9E9CC5D7EB971811810C9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DBDE6680A7FD9B348F4D20AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EC8F977CC4CABE1815EC5F0F /* StockServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockServiceTests.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B6C7D8E9F0A1B2 /* SparklineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparklineView.swift; sourceTree = "<group>"; };
+		D1E2F3A4B5C6D7E8F9A0B1C3 /* PriceAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlert.swift; sourceTree = "<group>"; };
 		D4E5F6071819A1B2C3D4E5F6 /* MenuBarLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabel.swift; sourceTree = "<group>"; };
 		F8B1157F816CFF9BBB9B3571 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		FFA0DD350D92AFA182D7215C /* TickerBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TickerBar.entitlements; sourceTree = "<group>"; };
@@ -84,6 +88,7 @@
 			children = (
 				D4E5F6071819A1B2C3D4E5F6 /* MenuBarLabel.swift */,
 				F8B1157F816CFF9BBB9B3571 /* SettingsView.swift */,
+				C1D2E3F4A5B6C7D8E9F0A1B2 /* SparklineView.swift */,
 				546AF9D5C78E7119E3C4397E /* WatchlistView.swift */,
 			);
 			path = Views;
@@ -110,6 +115,7 @@
 		7F0E226159EE2124503A1D18 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				D1E2F3A4B5C6D7E8F9A0B1C3 /* PriceAlert.swift */,
 				15068B565FB4936419815470 /* StockItem.swift */,
 			);
 			path = Models;
@@ -229,6 +235,8 @@
 				7404D19C7993CD33FB08B58D /* TickerBarApp.swift in Sources */,
 				8A834BC05313ED7089884EAA /* WatchlistView.swift in Sources */,
 				A1B2C3D4E5F60718192A3B4C /* MenuBarLabel.swift in Sources */,
+				C1D2E3F4A5B6C7D8E9F0A1B3 /* SparklineView.swift in Sources */,
+				D1E2F3A4B5C6D7E8F9A0B1C2 /* PriceAlert.swift in Sources */,
 				B2C3D4E5F607181920A1B2C3 /* UpdateChecker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

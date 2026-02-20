@@ -10,7 +10,10 @@
 
 - **Menu bar stock ticker** — see live prices at a glance without opening any app
 - **Compact mode** — stacked two-line display to minimize menu bar space
-- **Stock rotation** — automatically cycle through your watchlist, or pin a single stock
+- **Stock rotation** — automatically cycle through your watchlist, or pin a single stock; skips closed markets
+- **Sparkline charts** — tiny intraday price charts inline with each stock in the watchlist
+- **Price alerts** — set above/below price targets and get macOS notifications when triggered
+- **Drag to reorder** — rearrange your watchlist via right-click Move Up/Down
 - **Color-coded prices** — green for gains, red for losses
 - **Multi-exchange support** — tracks market hours for US, UK (LSE), EU, Tokyo, Hong Kong, and Shanghai exchanges
 - **Correct currency symbols** — displays prices in the stock's native currency (USD, GBP, EUR, JPY, etc.)

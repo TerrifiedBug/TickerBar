@@ -43,7 +43,7 @@ struct MenuBarLabel: View {
 
         // Build line 2: price + arrow (+ optional percent)
         let line2 = NSMutableAttributedString()
-        line2.append(NSAttributedString(string: String(format: "%.2f", stock.price), attributes: [
+        line2.append(NSAttributedString(string: "\(stock.currencySymbol)\(String(format: "%.2f", stock.price))", attributes: [
             .font: priceFont,
             .foregroundColor: textColor
         ]))
@@ -84,22 +84,53 @@ struct MenuBarLabel: View {
         return image
     }
 
-    // Normal: single-line inline "AAPL 150.00 ▲1.5%" with colored price
-    private func normalText(_ stock: StockItem) -> Text {
+    // Normal: single-line "AAPL $150.00 ▲1.5%" rendered as NSImage for reliable color
+    @ViewBuilder
+    private func normalText(_ stock: StockItem) -> some View {
+        let image = renderNormalImage(stock)
+        Image(nsImage: image)
+    }
+
+    private func renderNormalImage(_ stock: StockItem) -> NSImage {
         let arrow = stock.isPositive ? "▲" : "▼"
-        let color: Color = stock.isPositive ? .green : .red
+        let arrowColor: NSColor = stock.isPositive ? .systemGreen : .systemRed
+        let textColor = NSColor.white
 
-        var result = Text(stock.symbol).font(.system(size: 10, weight: .medium))
-            + Text(" ")
-            + Text(String(format: "%.2f", stock.price)).font(.system(size: 10, design: .monospaced)).foregroundColor(color)
-            + Text(" ") + Text(arrow).font(.system(size: 7)).foregroundColor(color)
+        let symbolFont = NSFont.systemFont(ofSize: 10, weight: .medium)
+        let priceFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+        let arrowFont = NSFont.systemFont(ofSize: 7, weight: .regular)
+        let percentFont = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .regular)
 
+        let str = NSMutableAttributedString()
+        str.append(NSAttributedString(string: stock.symbol, attributes: [
+            .font: symbolFont,
+            .foregroundColor: textColor
+        ]))
+        str.append(NSAttributedString(string: " \(stock.currencySymbol)\(String(format: "%.2f", stock.price))", attributes: [
+            .font: priceFont,
+            .foregroundColor: textColor
+        ]))
+        str.append(NSAttributedString(string: " \(arrow)", attributes: [
+            .font: arrowFont,
+            .foregroundColor: arrowColor
+        ]))
         if service.showPercentChange {
-            result = result + Text(String(format: "%.1f%%", abs(stock.changePercent)))
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(color)
+            str.append(NSAttributedString(string: String(format: "%.1f%%", abs(stock.changePercent)), attributes: [
+                .font: percentFont,
+                .foregroundColor: arrowColor
+            ]))
         }
 
-        return result
+        let size = str.size()
+        let height: CGFloat = 22
+        let yOffset = (height - size.height) / 2
+
+        let image = NSImage(size: NSSize(width: ceil(size.width), height: height), flipped: false) { _ in
+            str.draw(at: NSPoint(x: 0, y: yOffset))
+            return true
+        }
+
+        image.isTemplate = false
+        return image
     }
 }
