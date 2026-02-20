@@ -110,8 +110,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git stash
           git fetch origin master
           git checkout master
+          git checkout stash -- appcast.xml
           git add appcast.xml
           git commit -m "Update appcast.xml for $TAG" || echo "No changes to commit"
           git push origin master

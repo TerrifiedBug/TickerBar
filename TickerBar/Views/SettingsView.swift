@@ -68,9 +68,6 @@ struct SettingsView: View {
             // Show percent change in menu bar
             Toggle("Show % change in menu bar", isOn: $service.showPercentChange)
 
-            // Market hours only
-            Toggle("Only refresh during market hours", isOn: $service.marketHoursOnly)
-
             // Launch at login
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, newValue in
@@ -95,15 +92,21 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Toggle("Automatically check for updates", isOn: Binding(
-                get: { updateChecker.automaticallyChecksForUpdates },
-                set: { updateChecker.automaticallyChecksForUpdates = $0 }
-            ))
+            if updateChecker.installedViaBrew {
+                Text("Installed via Homebrew — update with `brew upgrade tickerbar`")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Toggle("Automatically check for updates", isOn: Binding(
+                    get: { updateChecker.automaticallyChecksForUpdates },
+                    set: { updateChecker.automaticallyChecksForUpdates = $0 }
+                ))
 
-            Button("Check for Updates") {
-                updateChecker.checkForUpdates()
+                Button("Check for Updates") {
+                    updateChecker.checkForUpdates()
+                }
+                .disabled(!updateChecker.canCheckForUpdates)
             }
-            .disabled(!updateChecker.canCheckForUpdates)
         }
         .padding(12)
     }
