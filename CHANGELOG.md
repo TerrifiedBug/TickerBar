@@ -4,6 +4,17 @@ All notable changes to TickerBar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-02-20
+
+### Added
+- Auto-detect Homebrew installation — disables Sparkle updates and shows `brew upgrade` hint in settings
+
+### Fixed
+- CI release workflow appcast.xml conflict on re-runs
+
+### Removed
+- "Only refresh during market hours" toggle — handled automatically
+
 ## [1.1.0] - 2026-02-20
 
 ### Added
