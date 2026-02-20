@@ -21,6 +21,16 @@
 
 ## Installation
 
+### Homebrew (recommended)
+
+```bash
+brew install TerrifiedBug/tickerbar/tickerbar
+```
+
+Update with `brew upgrade tickerbar`.
+
+### Manual download
+
 1. Download `TickerBar.zip` from the [latest release](https://github.com/TerrifiedBug/TickerBar/releases/latest)
 2. Unzip and drag `TickerBar.app` to your Applications folder
 3. On first launch, macOS may show a Gatekeeper warning since the app is not notarized:
