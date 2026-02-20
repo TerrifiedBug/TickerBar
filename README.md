@@ -65,6 +65,10 @@ Click the TickerBar menu bar item to open the watchlist, then click **Settings**
 - Launch at login
 - Automatic update checking
 
+## Disclaimer
+
+TickerBar is not affiliated, endorsed, or vetted by Yahoo, Inc. It uses Yahoo Finance's publicly available APIs. The data is intended for personal use only. You should refer to Yahoo!'s terms of use for any details on your rights to use the actual data downloaded.
+
 ## License
 
 MIT
