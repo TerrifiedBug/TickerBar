@@ -4,7 +4,11 @@
 
 <h1 align="center">TickerBar</h1>
 
-<p align="center">A lightweight macOS menu bar app for tracking stock prices in real-time using Yahoo Finance data.</p>
+<p align="center">A lightweight macOS menu bar app for tracking stock prices in real-time using Yahoo Finance data. For Free. No "Pro" features.</p>
+
+<p align="center">
+<img width="303" height="504" alt="image" src="https://github.com/user-attachments/assets/9c692459-f68a-43cc-9467-77784943cfc8" />
+</p>
 
 ## Features
 
@@ -13,14 +17,7 @@
 - **Stock rotation** — automatically cycle through your watchlist, or pin a single stock; skips closed markets
 - **Sparkline charts** — tiny intraday price charts inline with each stock in the watchlist
 - **Price alerts** — set above/below price targets and get macOS notifications when triggered
-- **Reorder watchlist** — right-click any stock to move it up or down
-- **Color-coded prices** — green for gains, red for losses
-- **Multi-exchange support** — tracks market hours for US, UK (LSE), EU, Tokyo, Hong Kong, and Shanghai exchanges
-- **Correct currency symbols** — displays prices in the stock's native currency (USD, GBP, EUR, JPY, etc.)
 - **Ticker search** — autocomplete suggestions from Yahoo Finance when adding symbols
-- **Symbol validation** — prevents adding invalid ticker symbols
-- **Auto-updates** — in-app updates via Sparkle, no manual re-downloading needed
-- **Launch at login** — optional auto-start via macOS Login Items
 
 ## Installation
 
