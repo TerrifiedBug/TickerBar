@@ -30,10 +30,15 @@ struct MenuBarLabel: View {
         let arrowColor: NSColor = stock.isPositive ? .systemGreen : .systemRed
         let textColor = NSColor.labelColor
 
-        let symbolFont = NSFont.systemFont(ofSize: 9, weight: .semibold)
-        let priceFont = NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .regular)
-        let arrowFont = NSFont.systemFont(ofSize: 6, weight: .regular)
-        let percentFont = NSFont.monospacedDigitSystemFont(ofSize: 7, weight: .regular)
+        // Scale the compact two-line glyphs with the menu bar text size
+        // (size 10 reproduces the historical defaults). Two stacked lines are
+        // bounded by the menu bar height, so very large sizes are most effective
+        // in normal (single-line) mode.
+        let scale = CGFloat(service.menuBarFontSize) / 10
+        let symbolFont = NSFont.systemFont(ofSize: 9 * scale, weight: .semibold)
+        let priceFont = NSFont.monospacedDigitSystemFont(ofSize: 8 * scale, weight: .regular)
+        let arrowFont = NSFont.systemFont(ofSize: 6 * scale, weight: .regular)
+        let percentFont = NSFont.monospacedDigitSystemFont(ofSize: 7 * scale, weight: .regular)
 
         // Build line 1: symbol
         let line1 = NSAttributedString(string: stock.symbol, attributes: [
@@ -61,9 +66,9 @@ struct MenuBarLabel: View {
         let line1Size = line1.size()
         let line2Size = line2.size()
         let width = max(line1Size.width, line2Size.width)
-        let height: CGFloat = 22 // menu bar height
         let lineSpacing: CGFloat = 1
         let totalTextHeight = line1Size.height + lineSpacing + line2Size.height
+        let height = max(22, ceil(totalTextHeight))
         let yOffset = (height - totalTextHeight) / 2
 
         // Resolve dynamic colors against the system (menu bar) appearance so the

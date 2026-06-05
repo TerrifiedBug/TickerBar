@@ -4,6 +4,12 @@ All notable changes to TickerBar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-06-05
+
+### Fixed
+- Menu bar text size now also applies to the compact (two-line) layout, not just normal mode
+- Dropdown no longer leaves an empty gap above its content after expanding and collapsing Settings — the popover now re-fits to its content height
+
 ## [1.2.1] - 2026-06-05
 
 ### Added

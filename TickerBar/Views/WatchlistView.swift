@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct WatchlistView: View {
     @Bindable var service: StockService
@@ -362,6 +363,7 @@ struct WatchlistView: View {
         }
         .frame(width: 300)
         .background(service.solidPopoverBackground ? Color(nsColor: .windowBackgroundColor) : Color.clear)
+        .background(MenuBarWindowResizer())
     }
 
     private func addSymbol() {
@@ -499,3 +501,33 @@ struct StockRowView: View {
     }
 }
 
+
+/// Re-fits the `MenuBarExtra(.window)` panel to its SwiftUI content height.
+/// SwiftUI grows the panel when content (e.g. inline Settings) expands but does
+/// not shrink it back, leaving an empty gap above the content. This anchors the
+/// top edge (just below the menu bar) and resizes the panel to the content's
+/// fitting height — on attach and on every content change.
+private final class WindowFittingView: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        fitWindow()
+    }
+
+    func fitWindow() {
+        guard let window, let content = window.contentView else { return }
+        content.layoutSubtreeIfNeeded()
+        let target = content.fittingSize.height
+        guard target > 1, abs(window.frame.height - target) > 0.5 else { return }
+        let frame = window.frame
+        window.setFrame(
+            NSRect(x: frame.origin.x, y: frame.maxY - target, width: frame.size.width, height: target),
+            display: true,
+            animate: false
+        )
+    }
+}
+
+private struct MenuBarWindowResizer: NSViewRepresentable {
+    func makeNSView(context: Context) -> WindowFittingView { WindowFittingView() }
+    func updateNSView(_ nsView: WindowFittingView, context: Context) { nsView.fitWindow() }
+}
