@@ -40,6 +40,12 @@ final class StockService {
     var baseCurrency: String {
         didSet { UserDefaults.standard.set(baseCurrency, forKey: "baseCurrency") }
     }
+    var menuBarFontSize: Double {
+        didSet { UserDefaults.standard.set(menuBarFontSize, forKey: "menuBarFontSize") }
+    }
+    var solidPopoverBackground: Bool {
+        didSet { UserDefaults.standard.set(solidPopoverBackground, forKey: "solidPopoverBackground") }
+    }
 
     // MARK: - Exchange Rates (e.g. "GBP" -> 1.27 means 1 GBP = 1.27 base currency units)
     var exchangeRates: [String: Double] = [:]
@@ -105,6 +111,8 @@ final class StockService {
         self.showPercentChange = defaults.object(forKey: "showPercentChange") as? Bool ?? true
         self.compactMenuBar = defaults.object(forKey: "compactMenuBar") as? Bool ?? false
         self.baseCurrency = defaults.string(forKey: "baseCurrency") ?? "USD"
+        self.menuBarFontSize = defaults.double(forKey: "menuBarFontSize").nonZero ?? 10
+        self.solidPopoverBackground = defaults.bool(forKey: "solidPopoverBackground")
 
         if let alertData = defaults.data(forKey: "priceAlerts"),
            let savedAlerts = try? JSONDecoder().decode([PriceAlert].self, from: alertData) {
@@ -245,6 +253,12 @@ final class StockService {
 
     // MARK: - Networking
 
+    private enum FetchOutcome: Sendable {
+        case success(StockItem)
+        case authFailure
+        case failure
+    }
+
     func fetchAllQuotes(isTimerTriggered: Bool = false) async {
         // Only skip fetching for automatic timer refreshes when all markets are closed.
         // Manual refreshes, initial load, and add-stock fetches always proceed.
@@ -253,7 +267,6 @@ final class StockService {
         }
 
         isLoading = true
-        errorMessage = nil
 
         // Ensure we have a valid crumb before fetching
         do {
@@ -264,28 +277,37 @@ final class StockService {
             return
         }
 
-        // Capture values needed for concurrent fetching
         let symbols = watchlist
-        let crumbValue = crumb
 
-        let fetched = await withTaskGroup(of: StockItem?.self, returning: [StockItem].self) { group in
-            for symbol in symbols {
-                group.addTask {
-                    await Self.fetchQuote(for: symbol, crumb: crumbValue)
-                }
+        // First attempt with the current crumb.
+        var result = await fetchQuotes(symbols: symbols, crumb: crumb)
+
+        // If every symbol failed with an auth error, the crumb/cookie has likely
+        // expired. Re-authenticate and retry once — the same recovery a manual
+        // refresh used to perform, now done automatically.
+        if result.items.isEmpty && result.authFailures > 0 {
+            invalidateAuth()
+            do {
+                try await ensureAuth()
+                result = await fetchQuotes(symbols: symbols, crumb: crumb)
+            } catch {
+                // Re-auth failed; fall through to keep-last-good handling below.
             }
-            var results: [StockItem] = []
-            for await result in group {
-                if let stock = result {
-                    results.append(stock)
-                }
-            }
-            return results
+        }
+
+        // Genuine total failure (after the retry). Keep the last good data so the
+        // menu bar doesn't blank out, surface a soft message, and invalidate auth
+        // so the next cycle re-authenticates. Deliberately leave lastUpdated alone.
+        if result.items.isEmpty && !symbols.isEmpty {
+            errorMessage = "Couldn't refresh — showing last update"
+            invalidateAuth()
+            isLoading = false
+            return
         }
 
         // Fetch v7 quote data for pre/post market prices (single batch call)
-        var enriched = fetched
-        if let crumbValue, !symbols.isEmpty {
+        var enriched = result.items
+        if let crumbValue = crumb, !symbols.isEmpty {
             let v7Data = await Self.fetchV7Quotes(symbols: symbols, crumb: crumbValue)
             for i in enriched.indices {
                 if let extra = v7Data[enriched[i].symbol] {
@@ -301,7 +323,7 @@ final class StockService {
         }
 
         // Fetch exchange rates for portfolio currency conversion
-        if let crumbValue, !holdings.isEmpty {
+        if let crumbValue = crumb, !holdings.isEmpty {
             let currencies = Set(enriched.compactMap { stock -> String? in
                 guard holdings[stock.symbol] != nil else { return nil }
                 // Normalize sub-unit currencies to their major unit
@@ -326,38 +348,66 @@ final class StockService {
             }
         }
 
-        // Sort to match watchlist order
-        stocks = watchlist.compactMap { symbol in
-            enriched.first { $0.symbol == symbol }
-        }
+        // Merge fresh quotes with the previous snapshot so a single symbol that
+        // transiently failed keeps its last-good values instead of disappearing.
+        // Order follows the watchlist.
+        let previous = stocks
+        stocks = Self.mergedStocks(watchlist: watchlist, fresh: enriched, previous: previous)
 
+        errorMessage = nil
         lastUpdated = Date()
         isLoading = false
         checkPriceAlerts()
+    }
 
-        if fetched.isEmpty && !watchlist.isEmpty {
-            errorMessage = "Unable to fetch quotes"
-            // Auth might have expired -- invalidate so next attempt re-authenticates
-            invalidateAuth()
+    /// Merge freshly-fetched quotes with the previous snapshot, preserving
+    /// watchlist order and falling back to the last-good item for any symbol
+    /// missing from `fresh`. Pure function — easy to unit test.
+    nonisolated static func mergedStocks(watchlist: [String], fresh: [StockItem], previous: [StockItem]) -> [StockItem] {
+        watchlist.compactMap { sym in
+            fresh.first { $0.symbol == sym } ?? previous.first { $0.symbol == sym }
         }
     }
 
-    private nonisolated static func fetchQuote(for symbol: String, crumb: String?) async -> StockItem? {
-        guard let crumb else { return nil }
+    /// Fetch all symbols concurrently. Returns successfully-parsed items plus a
+    /// count of auth failures (HTTP 401/403) so the caller can decide whether to
+    /// re-authenticate and retry.
+    private func fetchQuotes(symbols: [String], crumb: String?) async -> (items: [StockItem], authFailures: Int) {
+        await withTaskGroup(of: FetchOutcome.self) { group in
+            for symbol in symbols {
+                group.addTask {
+                    await Self.fetchQuote(for: symbol, crumb: crumb)
+                }
+            }
+            var items: [StockItem] = []
+            var authFailures = 0
+            for await outcome in group {
+                switch outcome {
+                case .success(let stock): items.append(stock)
+                case .authFailure: authFailures += 1
+                case .failure: break
+                }
+            }
+            return (items: items, authFailures: authFailures)
+        }
+    }
+
+    private nonisolated static func fetchQuote(for symbol: String, crumb: String?) async -> FetchOutcome {
+        guard let crumb else { return .failure }
         let urlString = "\(baseURL)/v8/finance/chart/\(symbol)?interval=5m&range=1d&crumb=\(crumb)"
-        guard let url = URL(string: urlString) else { return nil }
+        guard let url = URL(string: urlString) else { return .failure }
 
         do {
             let (data, response) = try await session.data(from: url)
 
             if let httpResponse = response as? HTTPURLResponse,
                httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-                return nil
+                return .authFailure
             }
 
-            return try parseQuoteResponse(data: data)
+            return .success(try parseQuoteResponse(data: data))
         } catch {
-            return nil
+            return .failure
         }
     }
 
@@ -490,11 +540,14 @@ final class StockService {
             return "Unable to validate (auth failed)"
         }
 
-        let stock = await Self.fetchQuote(for: symbol, crumb: crumb)
-        if stock == nil {
+        switch await Self.fetchQuote(for: symbol, crumb: crumb) {
+        case .success:
+            return nil
+        case .authFailure:
+            return "Couldn't validate \(symbol) right now"
+        case .failure:
             return "\(symbol) is not a valid ticker symbol"
         }
-        return nil
     }
 
     func removeSymbol(_ symbol: String) {

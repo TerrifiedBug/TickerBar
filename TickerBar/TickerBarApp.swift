@@ -14,7 +14,6 @@ struct TickerBarApp: App {
             MenuBarLabel(service: stockService)
         }
         .menuBarExtraStyle(.window)
-        .defaultSize(width: 300, height: 400)
     }
 
     init() {

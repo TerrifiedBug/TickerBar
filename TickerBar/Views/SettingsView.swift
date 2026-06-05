@@ -68,6 +68,26 @@ struct SettingsView: View {
             // Show percent change in menu bar
             Toggle("Show % change in menu bar", isOn: $service.showPercentChange)
 
+            // Menu bar text size (normal mode)
+            HStack {
+                Text("Menu bar text size")
+                Spacer()
+                Picker("", selection: $service.menuBarFontSize) {
+                    Text("10").tag(10.0)
+                    Text("11").tag(11.0)
+                    Text("12").tag(12.0)
+                    Text("13").tag(13.0)
+                    Text("14").tag(14.0)
+                    Text("15").tag(15.0)
+                    Text("16").tag(16.0)
+                }
+                .labelsHidden()
+                .frame(width: 100)
+            }
+
+            // Opaque dropdown background for readability over busy wallpapers
+            Toggle("Solid dropdown background", isOn: $service.solidPopoverBackground)
+
             // Base currency for portfolio
             HStack {
                 Text("Portfolio currency")

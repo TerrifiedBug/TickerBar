@@ -28,7 +28,7 @@ struct MenuBarLabel: View {
     private func renderCompactImage(_ stock: StockItem) -> NSImage {
         let arrow = stock.isPositive ? "▲" : "▼"
         let arrowColor: NSColor = stock.isPositive ? .systemGreen : .systemRed
-        let textColor = NSColor.white
+        let textColor = NSColor.labelColor
 
         let symbolFont = NSFont.systemFont(ofSize: 9, weight: .semibold)
         let priceFont = NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .regular)
@@ -66,17 +66,22 @@ struct MenuBarLabel: View {
         let totalTextHeight = line1Size.height + lineSpacing + line2Size.height
         let yOffset = (height - totalTextHeight) / 2
 
-        let image = NSImage(size: NSSize(width: ceil(width), height: height), flipped: false) { rect in
-            // Line 2 at bottom (flipped=false means origin is bottom-left)
-            line2.draw(at: NSPoint(
-                x: (width - line2Size.width) / 2,
-                y: yOffset
-            ))
-            // Line 1 on top
-            line1.draw(at: NSPoint(
-                x: (width - line1Size.width) / 2,
-                y: yOffset + line2Size.height + lineSpacing
-            ))
+        // Resolve dynamic colors against the system (menu bar) appearance so the
+        // text stays legible in both Light and Dark mode.
+        let appearance = NSApp.effectiveAppearance
+        let image = NSImage(size: NSSize(width: ceil(width), height: height), flipped: false) { _ in
+            appearance.performAsCurrentDrawingAppearance {
+                // Line 2 at bottom (flipped=false means origin is bottom-left)
+                line2.draw(at: NSPoint(
+                    x: (width - line2Size.width) / 2,
+                    y: yOffset
+                ))
+                // Line 1 on top
+                line1.draw(at: NSPoint(
+                    x: (width - line1Size.width) / 2,
+                    y: yOffset + line2Size.height + lineSpacing
+                ))
+            }
             return true
         }
 
@@ -94,12 +99,15 @@ struct MenuBarLabel: View {
     private func renderNormalImage(_ stock: StockItem) -> NSImage {
         let arrow = stock.isPositive ? "▲" : "▼"
         let arrowColor: NSColor = stock.isPositive ? .systemGreen : .systemRed
-        let textColor = NSColor.white
+        let textColor = NSColor.labelColor
 
-        let symbolFont = NSFont.systemFont(ofSize: 10, weight: .medium)
-        let priceFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular)
-        let arrowFont = NSFont.systemFont(ofSize: 7, weight: .regular)
-        let percentFont = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .regular)
+        // Menu bar text size is user-configurable; size 10 reproduces the
+        // historical default. Secondary glyphs scale proportionally.
+        let size = CGFloat(service.menuBarFontSize)
+        let symbolFont = NSFont.systemFont(ofSize: size, weight: .medium)
+        let priceFont = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular)
+        let arrowFont = NSFont.systemFont(ofSize: size * 0.7, weight: .regular)
+        let percentFont = NSFont.monospacedDigitSystemFont(ofSize: size * 0.9, weight: .regular)
 
         let str = NSMutableAttributedString()
         str.append(NSAttributedString(string: stock.symbol, attributes: [
@@ -121,12 +129,18 @@ struct MenuBarLabel: View {
             ]))
         }
 
-        let size = str.size()
-        let height: CGFloat = 22
-        let yOffset = (height - size.height) / 2
+        let textSize = str.size()
+        // Grow the canvas for larger fonts so taller text isn't clipped; never
+        // shrink below the standard menu bar height.
+        let height = max(22, ceil(textSize.height))
+        let yOffset = (height - textSize.height) / 2
 
-        let image = NSImage(size: NSSize(width: ceil(size.width), height: height), flipped: false) { _ in
-            str.draw(at: NSPoint(x: 0, y: yOffset))
+        // Resolve dynamic colors against the system (menu bar) appearance.
+        let appearance = NSApp.effectiveAppearance
+        let image = NSImage(size: NSSize(width: ceil(textSize.width), height: height), flipped: false) { _ in
+            appearance.performAsCurrentDrawingAppearance {
+                str.draw(at: NSPoint(x: 0, y: yOffset))
+            }
             return true
         }
 

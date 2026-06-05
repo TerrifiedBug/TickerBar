@@ -4,6 +4,17 @@ All notable changes to TickerBar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-06-05
+
+### Added
+- Menu bar text size setting (normal mode) — choose 10–16pt; defaults to the original 10pt
+- Solid dropdown background option for readability over busy wallpapers
+
+### Fixed
+- Menu bar dropdown no longer floats with an empty gap above its content
+- Menu bar text is now legible on light menu bars (Light Mode) — uses adaptive system colors instead of hardcoded white
+- Transient Yahoo Finance API errors now auto-retry (re-authenticate) and retain the last known prices instead of blanking the menu bar
+
 ## [1.2.0] - 2026-02-20
 
 ### Added

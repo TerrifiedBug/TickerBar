@@ -13,6 +13,8 @@ final class StockServiceTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: "rotationSpeed")
         UserDefaults.standard.removeObject(forKey: "pinnedSymbol")
         UserDefaults.standard.removeObject(forKey: "marketHoursOnly")
+        UserDefaults.standard.removeObject(forKey: "menuBarFontSize")
+        UserDefaults.standard.removeObject(forKey: "solidPopoverBackground")
     }
 
     func testDefaultWatchlist() {
@@ -158,5 +160,81 @@ final class StockServiceTests: XCTestCase {
         let crumb = "abc123XYZ"
         XCTAssertEqual(crumb.count, 9)
         XCTAssertFalse(crumb.contains("<html>"))
+    }
+
+    // MARK: - mergedStocks (last-good preservation)
+
+    func testMergedStocksPrefersFreshFollowsWatchlistOrderAndKeepsLastGood() {
+        let prevA = StockItem(symbol: "A", name: "A Inc", price: 10, previousClose: 9)
+        let prevB = StockItem(symbol: "B", name: "B Inc", price: 20, previousClose: 19)
+        let prevC = StockItem(symbol: "C", name: "C Inc", price: 30, previousClose: 29)
+        let freshA = StockItem(symbol: "A", name: "A Inc", price: 11, previousClose: 9)
+        let freshC = StockItem(symbol: "C", name: "C Inc", price: 33, previousClose: 29)
+
+        // B is absent from fresh; fresh is deliberately out of watchlist order.
+        let merged = StockService.mergedStocks(
+            watchlist: ["A", "B", "C"],
+            fresh: [freshC, freshA],
+            previous: [prevA, prevB, prevC]
+        )
+
+        XCTAssertEqual(merged.map(\.symbol), ["A", "B", "C"])  // watchlist order
+        XCTAssertEqual(merged[0].price, 11)  // fresh A wins over previous A
+        XCTAssertEqual(merged[1].price, 20)  // B kept from previous (last-good)
+        XCTAssertEqual(merged[2].price, 33)  // fresh C wins
+    }
+
+    func testMergedStocksFallsBackEntirelyToPreviousWhenFreshEmpty() {
+        let prevA = StockItem(symbol: "A", name: "A Inc", price: 10, previousClose: 9)
+        let prevB = StockItem(symbol: "B", name: "B Inc", price: 20, previousClose: 19)
+
+        let merged = StockService.mergedStocks(
+            watchlist: ["A", "B"],
+            fresh: [],
+            previous: [prevA, prevB]
+        )
+
+        XCTAssertEqual(merged.map(\.symbol), ["A", "B"])
+        XCTAssertEqual(merged[0].price, 10)
+        XCTAssertEqual(merged[1].price, 20)
+    }
+
+    func testMergedStocksDropsSymbolMissingFromFreshAndPrevious() {
+        let prevA = StockItem(symbol: "A", name: "A Inc", price: 10, previousClose: 9)
+
+        // "Z" appears in neither fresh nor previous and must be omitted.
+        let merged = StockService.mergedStocks(
+            watchlist: ["A", "Z"],
+            fresh: [],
+            previous: [prevA]
+        )
+
+        XCTAssertEqual(merged.map(\.symbol), ["A"])
+    }
+
+    // MARK: - New settings (defaults + persistence)
+
+    func testMenuBarFontSizeDefaultsToTen() {
+        let service = StockService()
+        XCTAssertEqual(service.menuBarFontSize, 10)
+    }
+
+    func testMenuBarFontSizePersists() {
+        let service = StockService()
+        service.menuBarFontSize = 13
+        XCTAssertEqual(UserDefaults.standard.double(forKey: "menuBarFontSize"), 13)
+        XCTAssertEqual(StockService().menuBarFontSize, 13)
+    }
+
+    func testSolidPopoverBackgroundDefaultsToFalse() {
+        let service = StockService()
+        XCTAssertFalse(service.solidPopoverBackground)
+    }
+
+    func testSolidPopoverBackgroundPersists() {
+        let service = StockService()
+        service.solidPopoverBackground = true
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: "solidPopoverBackground"))
+        XCTAssertTrue(StockService().solidPopoverBackground)
     }
 }

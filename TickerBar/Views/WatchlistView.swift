@@ -361,6 +361,7 @@ struct WatchlistView: View {
             }
         }
         .frame(width: 300)
+        .background(service.solidPopoverBackground ? Color(nsColor: .windowBackgroundColor) : Color.clear)
     }
 
     private func addSymbol() {
