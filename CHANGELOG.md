@@ -4,6 +4,9 @@ All notable changes to TickerBar will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Dropdown no longer leaves a large empty space after collapsing the inline Settings panel — the popover now resizes from the content height SwiftUI has actually committed (via GeometryReader) instead of the host view's lagging `fittingSize`, which never updated on collapse
+
 ## [1.2.2] - 2026-06-05
 
 ### Fixed
