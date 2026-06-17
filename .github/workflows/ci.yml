@@ -38,3 +38,11 @@ jobs:
             -scheme TickerBar \
             -destination 'platform=macOS' \
             test
+
+      - name: Build widget extension
+        run: |
+          xcodebuild -project TickerBar.xcodeproj \
+            -target TickerBarWidgetExtension \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build

@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D0D0D0D0D0D0D0D0D0D00010 /* TickerBarWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D0D0D0D0D0D0D0D0D00001 /* TickerBarWidget.swift */; };
+		D0D0D0D0D0D0D0D0D0D00011 /* StockItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15068B565FB4936419815470 /* StockItem.swift */; };
+		D0D0D0D0D0D0D0D0D0D00012 /* StockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DF1F4E796FC32743DAF80A0 /* StockService.swift */; };
+		D0D0D0D0D0D0D0D0D0D00013 /* PriceAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C6D7E8F9A0B1C3 /* PriceAlert.swift */; };
 		1206ACA3A55E1A4E1896BB35 /* StockServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC8F977CC4CABE1815EC5F0F /* StockServiceTests.swift */; };
 		631F6E7C8AED98BF8B5E620D /* StockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DF1F4E796FC32743DAF80A0 /* StockService.swift */; };
 		7404D19C7993CD33FB08B58D /* TickerBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADFBB8F08EEDFB92601682F9 /* TickerBarApp.swift */; };
@@ -32,6 +36,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		D0D0D0D0D0D0D0D0D0D00001 /* TickerBarWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TickerBarWidget.swift; sourceTree = "<group>"; };
+		D0D0D0D0D0D0D0D0D0D00002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D0D0D0D0D0D0D0D0D0D00003 /* TickerBarWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TickerBarWidget.entitlements; sourceTree = "<group>"; };
+		D0D0D0D0D0D0D0D0D0D00004 /* TickerBarWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TickerBarWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		03D166ED1C6589834CEC90ED /* TickerBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TickerBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		15068B565FB4936419815470 /* StockItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockItem.swift; sourceTree = "<group>"; };
 		546AF9D5C78E7119E3C4397E /* WatchlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistView.swift; sourceTree = "<group>"; };
@@ -51,6 +59,16 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		D0D0D0D0D0D0D0D0D0D00020 /* TickerBarWidget */ = {
+			isa = PBXGroup;
+			children = (
+				D0D0D0D0D0D0D0D0D0D00001 /* TickerBarWidget.swift */,
+				D0D0D0D0D0D0D0D0D0D00002 /* Info.plist */,
+				D0D0D0D0D0D0D0D0D0D00003 /* TickerBarWidget.entitlements */,
+			);
+			path = TickerBarWidget;
+			sourceTree = "<group>";
+		};
 		0C67912423601107F4D18BA8 /* TickerBarTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -99,6 +117,7 @@
 			children = (
 				03D166ED1C6589834CEC90ED /* TickerBar.app */,
 				5AAA7340F995D424D5754196 /* TickerBarTests.xctest */,
+				D0D0D0D0D0D0D0D0D0D00004 /* TickerBarWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -109,6 +128,7 @@
 				4025540C0EEF2C4FE8877BD5 /* TickerBar */,
 				0C67912423601107F4D18BA8 /* TickerBarTests */,
 				7303D82EB9E66657D1B04F5A /* Products */,
+				D0D0D0D0D0D0D0D0D0D00020 /* TickerBarWidget */,
 			);
 			sourceTree = "<group>";
 		};
@@ -124,6 +144,25 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		D0D0D0D0D0D0D0D0D0D00030 /* TickerBarWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0D0D0D0D0D0D0D0D0D00042 /* Build configuration list for PBXNativeTarget "TickerBarWidgetExtension" */;
+			buildPhases = (
+				D0D0D0D0D0D0D0D0D0D00031 /* Sources */,
+				D0D0D0D0D0D0D0D0D0D00032 /* Frameworks */,
+				D0D0D0D0D0D0D0D0D0D00033 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TickerBarWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = TickerBarWidgetExtension;
+			productReference = D0D0D0D0D0D0D0D0D0D00004 /* TickerBarWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		173B8A840F887241D737ABE4 /* TickerBarTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 38821C0FE5987841A601D570 /* Build configuration list for PBXNativeTarget "TickerBarTests" */;
@@ -190,11 +229,19 @@
 			targets = (
 				9ACD20D2C97100CD8A5C346E /* TickerBar */,
 				173B8A840F887241D737ABE4 /* TickerBarTests */,
+				D0D0D0D0D0D0D0D0D0D00030 /* TickerBarWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		D0D0D0D0D0D0D0D0D0D00032 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AABBCCDD00112233EEFF0033 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -205,6 +252,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
+		D0D0D0D0D0D0D0D0D0D00033 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F0A6B242394F644EB440A6A2 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -216,6 +270,17 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		D0D0D0D0D0D0D0D0D0D00031 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D0D0D0D0D0D0D0D0D0D00010 /* TickerBarWidget.swift in Sources */,
+				D0D0D0D0D0D0D0D0D0D00011 /* StockItem.swift in Sources */,
+				D0D0D0D0D0D0D0D0D0D00012 /* StockService.swift in Sources */,
+				D0D0D0D0D0D0D0D0D0D00013 /* PriceAlert.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		4B1513BDC867D0691BE01444 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -252,6 +317,54 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		D0D0D0D0D0D0D0D0D0D00040 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TickerBarWidget/TickerBarWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TickerBarWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tickerbar.app.TickerBarWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			};
+			name = Debug;
+		};
+		D0D0D0D0D0D0D0D0D0D00041 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TickerBarWidget/TickerBarWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TickerBarWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tickerbar.app.TickerBarWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
 		582F8AD6218661CF3F67E152 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -444,6 +557,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		D0D0D0D0D0D0D0D0D0D00042 /* Build configuration list for PBXNativeTarget "TickerBarWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0D0D0D0D0D0D0D0D0D00040 /* Debug */,
+				D0D0D0D0D0D0D0D0D0D00041 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		38821C0FE5987841A601D570 /* Build configuration list for PBXNativeTarget "TickerBarTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
