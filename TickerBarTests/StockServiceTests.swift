@@ -552,4 +552,31 @@ final class StockServiceTests: XCTestCase {
         service.normalizeDisplayIndex()
         XCTAssertEqual(service.currentDisplayIndex, 1)
     }
+
+    // MARK: - Backup (export / import)
+
+    func testBackupRoundTrip() {
+        let service = StockService(defaults: defaults)
+        service.watchlist = ["AAPL", "MSFT"]
+        service.addLot(symbol: "AAPL", kind: .purchase, shares: 10, costBasis: 100)
+        service.addLot(symbol: "AAPL", kind: .rsu, shares: 5, costBasis: nil)
+        service.priceAlerts = [PriceAlert(symbol: "AAPL", targetPrice: 200, isAbove: true)]
+        service.baseCurrency = "GBP"
+
+        let data = try! service.exportBackupData()
+
+        let restoreSuite = "restore-\(UUID().uuidString)"
+        defer { UserDefaults.standard.removePersistentDomain(forName: restoreSuite) }
+        let restored = StockService(defaults: UserDefaults(suiteName: restoreSuite)!)
+        XCTAssertTrue(restored.importBackupData(data))
+        XCTAssertEqual(restored.watchlist, ["AAPL", "MSFT"])
+        XCTAssertEqual(restored.lots(for: "AAPL").count, 2)
+        XCTAssertEqual(restored.priceAlerts.count, 1)
+        XCTAssertEqual(restored.baseCurrency, "GBP")
+    }
+
+    func testImportRejectsMalformedData() {
+        let service = StockService(defaults: defaults)
+        XCTAssertFalse(service.importBackupData(Data("not json".utf8)))
+    }
 }

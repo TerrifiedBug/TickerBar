@@ -781,6 +781,49 @@ final class StockService {
         if list.isEmpty { holdings.removeValue(forKey: symbol) } else { holdings[symbol] = list }
     }
 
+    // MARK: - Backup (export / import)
+
+    /// Portable snapshot of all user data. All UserDefaults-backed state is here
+    /// so a backup can move a setup to a new Mac or recover after a reset.
+    struct PortfolioBackup: Codable {
+        var schemaVersion: Int
+        var watchlist: [String]
+        var holdings: [String: [Holding]]
+        var priceAlerts: [PriceAlert]
+        var baseCurrency: String
+    }
+
+    static let backupSchemaVersion = 1
+
+    func exportBackupData() throws -> Data {
+        let backup = PortfolioBackup(
+            schemaVersion: Self.backupSchemaVersion,
+            watchlist: watchlist,
+            holdings: holdings,
+            priceAlerts: priceAlerts,
+            baseCurrency: baseCurrency
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(backup)
+    }
+
+    /// Replace current data with a decoded backup. Returns false (and changes
+    /// nothing) on malformed or empty input. Does not fetch — the caller should
+    /// refresh afterward.
+    @discardableResult
+    func importBackupData(_ data: Data) -> Bool {
+        guard let backup = try? JSONDecoder().decode(PortfolioBackup.self, from: data),
+              !backup.watchlist.isEmpty else { return false }
+        watchlist = backup.watchlist
+        holdings = backup.holdings
+        priceAlerts = backup.priceAlerts
+        if Self.supportedBaseCurrencies.contains(backup.baseCurrency) {
+            baseCurrency = backup.baseCurrency
+        }
+        return true
+    }
+
     /// Exchange rate from a stock's currency to baseCurrency. Returns nil when a
     /// required (non-base) rate hasn't been fetched yet, so callers exclude the
     /// holding instead of silently valuing it at parity — which previously
