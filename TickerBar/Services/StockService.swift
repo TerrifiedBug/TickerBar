@@ -161,16 +161,23 @@ final class StockService {
     var currentDisplayStock: StockItem? {
         guard !stocks.isEmpty else { return nil }
         if rotationEnabled {
-            let current = stocks[currentDisplayIndex % stocks.count]
-            // If current stock's market is closed, prefer an open one (unless all are closed)
-            if !Self.isOpen(current) {
-                if let openStock = stocks.first(where: { Self.isOpen($0) }) {
-                    return openStock
-                }
-            }
-            return current
+            return stocks[currentDisplayIndex % stocks.count]
         } else {
             return stocks.first { $0.symbol == pinnedSymbol } ?? stocks.first
+        }
+    }
+
+    /// Move the rotation index onto an open market when one exists, so the
+    /// displayed stock and `currentDisplayIndex` never disagree (the getter is
+    /// side-effect free). Call this whenever the stock set changes.
+    func normalizeDisplayIndex() {
+        guard rotationEnabled, !stocks.isEmpty else { return }
+        let bounded = currentDisplayIndex % stocks.count
+        if !Self.isOpen(stocks[bounded]),
+           let openIdx = stocks.firstIndex(where: { Self.isOpen($0) }) {
+            currentDisplayIndex = openIdx
+        } else {
+            currentDisplayIndex = bounded
         }
     }
 
@@ -465,6 +472,7 @@ final class StockService {
         // Order follows the watchlist.
         let previous = stocks
         stocks = Self.mergedStocks(watchlist: watchlist, fresh: enriched, previous: previous)
+        normalizeDisplayIndex()
 
         errorMessage = nil
         lastUpdated = Date()
@@ -661,6 +669,7 @@ final class StockService {
         stocks.removeAll { $0.symbol == symbol }
         priceAlerts.removeAll { $0.symbol == symbol }
         holdings.removeValue(forKey: symbol)
+        normalizeDisplayIndex()
     }
 
     func moveSymbol(from source: Int, to destination: Int) {
@@ -670,6 +679,7 @@ final class StockService {
         stocks = watchlist.compactMap { sym in
             stocks.first { $0.symbol == sym }
         }
+        normalizeDisplayIndex()
     }
 
     // MARK: - Price Alert Management

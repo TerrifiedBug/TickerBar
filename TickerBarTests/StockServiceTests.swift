@@ -526,4 +526,30 @@ final class StockServiceTests: XCTestCase {
         service.advanceDisplay()          // should skip to B (the only open one)
         XCTAssertEqual(service.currentDisplayIndex, 1)
     }
+
+    // MARK: - Rotation index sync
+
+    func testNormalizeDisplayIndexLandsOnOpenAndMatchesGetter() {
+        let service = StockService(defaults: defaults)
+        var a = stock("A", price: 1); a.marketState = "CLOSED"
+        var b = stock("B", price: 2); b.marketState = "REGULAR"
+        service.stocks = [a, b]
+        service.currentDisplayIndex = 0   // closed
+        service.normalizeDisplayIndex()
+        XCTAssertEqual(service.currentDisplayIndex, 1)
+        XCTAssertEqual(service.currentDisplayStock?.symbol, "B")
+        // The getter and the index agree — the desync this plan fixes.
+        XCTAssertEqual(service.currentDisplayStock?.symbol,
+                       service.stocks[service.currentDisplayIndex].symbol)
+    }
+
+    func testNormalizeDisplayIndexKeepsIndexWhenAllClosed() {
+        let service = StockService(defaults: defaults)
+        var a = stock("A", price: 1); a.marketState = "CLOSED"
+        var b = stock("B", price: 2); b.marketState = "CLOSED"
+        service.stocks = [a, b]
+        service.currentDisplayIndex = 1
+        service.normalizeDisplayIndex()
+        XCTAssertEqual(service.currentDisplayIndex, 1)
+    }
 }
