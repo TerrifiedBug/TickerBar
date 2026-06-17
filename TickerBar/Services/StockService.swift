@@ -390,11 +390,7 @@ final class StockService {
         if let crumbValue = crumb, !holdings.isEmpty {
             let currencies = Set(enriched.compactMap { stock -> String? in
                 guard holdings[stock.symbol] != nil else { return nil }
-                // Normalize sub-unit currencies to their major unit
-                let raw = stock.currency ?? "USD"
-                if raw == "GBp" || raw.uppercased() == "GBX" { return "GBP" }
-                if raw == "ILA" { return "ILS" }
-                return raw.uppercased()
+                return CurrencyUnit.majorUnitCode(stock.currency)
             })
             let neededRates = currencies.filter { $0 != baseCurrency }
             if !neededRates.isEmpty {
@@ -710,17 +706,9 @@ final class StockService {
         holdings[symbol]
     }
 
-    /// Get the normalized major-unit currency code for a stock (GBp/GBX -> GBP, ILA -> ILS)
-    private func normalizedCurrency(for stock: StockItem) -> String {
-        let raw = stock.currency ?? "USD"
-        if raw == "GBp" || raw.uppercased() == "GBX" { return "GBP" }
-        if raw == "ILA" { return "ILS" }
-        return raw.uppercased()
-    }
-
     /// Exchange rate from a stock's currency to baseCurrency. Returns 1.0 if same or unknown.
     private func rateToBase(for stock: StockItem) -> Double {
-        let cur = normalizedCurrency(for: stock)
+        let cur = CurrencyUnit.majorUnitCode(stock.currency)
         if cur == baseCurrency { return 1.0 }
         return exchangeRates[cur] ?? 1.0
     }

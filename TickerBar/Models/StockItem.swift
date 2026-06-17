@@ -1,5 +1,31 @@
 import Foundation
 
+/// Single source of truth for exchange sub-unit currencies. Some venues quote
+/// prices in 1/100 of the major unit: GBp/GBX = British pence, ILA = Israeli
+/// agorot. Centralised here so the scaling and FX-normalisation rules can't
+/// drift between `StockItem` display values and `StockService` portfolio math.
+enum CurrencyUnit {
+    /// True when prices for this currency code are quoted in sub-units (×1/100).
+    static func isSubUnit(_ currency: String?) -> Bool {
+        let c = currency ?? ""
+        return c == "GBp" || c.uppercased() == "GBX" || c == "ILA"
+    }
+
+    /// Divisor converting a sub-unit price to its major unit (100 for sub-units, else 1).
+    static func subUnitDivisor(_ currency: String?) -> Double {
+        isSubUnit(currency) ? 100.0 : 1.0
+    }
+
+    /// Major-unit ISO code for a quote currency (GBp/GBX -> GBP, ILA -> ILS).
+    /// nil defaults to USD; anything else is upper-cased.
+    static func majorUnitCode(_ currency: String?) -> String {
+        let raw = currency ?? "USD"
+        if raw == "GBp" || raw.uppercased() == "GBX" { return "GBP" }
+        if raw == "ILA" { return "ILS" }
+        return raw.uppercased()
+    }
+}
+
 struct StockItem: Identifiable, Codable, Equatable {
     let symbol: String
     let name: String
@@ -24,14 +50,12 @@ struct StockItem: Identifiable, Codable, Equatable {
 
     /// Whether the API price is in sub-units (pence, agorot, etc.)
     var isSubUnit: Bool {
-        let c = currency ?? ""
-        // GBp / GBX = British pence, ILA = Israeli agorot
-        return c == "GBp" || c.uppercased() == "GBX" || c == "ILA"
+        CurrencyUnit.isSubUnit(currency)
     }
 
     /// Divisor to convert sub-units to major currency units
     private var subUnitScale: Double {
-        isSubUnit ? 100.0 : 1.0
+        CurrencyUnit.subUnitDivisor(currency)
     }
 
     // MARK: - Display values (converted to major currency units)

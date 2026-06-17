@@ -65,4 +65,42 @@ final class StockItemTests: XCTestCase {
         let stock = StockItem(symbol: "X", name: "X", price: 10, previousClose: 0)
         XCTAssertEqual(stock.changePercent, 0.0)
     }
+
+    // MARK: - CurrencyUnit + sub-unit scaling
+
+    func testCurrencyUnitSubUnitDetection() {
+        XCTAssertTrue(CurrencyUnit.isSubUnit("GBp"))
+        XCTAssertTrue(CurrencyUnit.isSubUnit("GBX"))
+        XCTAssertTrue(CurrencyUnit.isSubUnit("gbx"))
+        XCTAssertTrue(CurrencyUnit.isSubUnit("ILA"))
+        XCTAssertFalse(CurrencyUnit.isSubUnit("GBP"))
+        XCTAssertFalse(CurrencyUnit.isSubUnit("USD"))
+        XCTAssertFalse(CurrencyUnit.isSubUnit(nil))
+    }
+
+    func testCurrencyUnitDivisor() {
+        XCTAssertEqual(CurrencyUnit.subUnitDivisor("GBX"), 100)
+        XCTAssertEqual(CurrencyUnit.subUnitDivisor("USD"), 1)
+        XCTAssertEqual(CurrencyUnit.subUnitDivisor(nil), 1)
+    }
+
+    func testCurrencyUnitMajorUnitCode() {
+        XCTAssertEqual(CurrencyUnit.majorUnitCode("GBp"), "GBP")
+        XCTAssertEqual(CurrencyUnit.majorUnitCode("GBX"), "GBP")
+        XCTAssertEqual(CurrencyUnit.majorUnitCode("ILA"), "ILS")
+        XCTAssertEqual(CurrencyUnit.majorUnitCode("eur"), "EUR")
+        XCTAssertEqual(CurrencyUnit.majorUnitCode(nil), "USD")
+    }
+
+    func testSubUnitDisplayPriceScaling() {
+        let pence = StockItem(symbol: "VOD.L", name: "Vodafone", price: 250.0, previousClose: 240.0, currency: "GBX")
+        XCTAssertEqual(pence.displayPrice, 2.50, accuracy: 0.0001)
+        XCTAssertEqual(pence.displayChange, 0.10, accuracy: 0.0001)
+        XCTAssertEqual(pence.currencySymbol, "£")
+    }
+
+    func testNonSubUnitDisplayPriceUnchanged() {
+        let usd = StockItem(symbol: "AAPL", name: "Apple", price: 185.0, previousClose: 183.0, currency: "USD")
+        XCTAssertEqual(usd.displayPrice, 185.0, accuracy: 0.0001)
+    }
 }
