@@ -283,48 +283,61 @@ final class StockService {
         }
 
         let symbols = watchlist
+        let enriched: [StockItem]
 
-        // First attempt with the current crumb.
-        var result = await api.fetchQuotes(symbols: symbols, crumb: api.currentCrumb)
+        // Fast path: one batched v7 quote + one batched v8 spark call instead of
+        // N per-symbol chart requests. Used ONLY when it fully covers the
+        // watchlist (price AND sparkline for every symbol); otherwise we fall
+        // through to the resilient per-symbol path below, so a partial or
+        // unexpected batch response can never regress the display.
+        if !symbols.isEmpty,
+           let batch = await api.fetchBatch(symbols: symbols, crumb: api.currentCrumb),
+           batch.count == symbols.count {
+            enriched = batch
+        } else {
+            // First attempt with the current crumb.
+            var result = await api.fetchQuotes(symbols: symbols, crumb: api.currentCrumb)
 
-        // If every symbol failed with an auth error, the crumb/cookie has likely
-        // expired. Re-authenticate and retry once — the same recovery a manual
-        // refresh used to perform, now done automatically.
-        if result.items.isEmpty && result.authFailures > 0 {
-            api.invalidateAuth()
-            do {
-                try await api.ensureAuth()
-                result = await api.fetchQuotes(symbols: symbols, crumb: api.currentCrumb)
-            } catch {
-                // Re-auth failed; fall through to keep-last-good handling below.
-            }
-        }
-
-        // Genuine total failure (after the retry). Keep the last good data so the
-        // menu bar doesn't blank out, surface a soft message, and invalidate auth
-        // so the next cycle re-authenticates. Deliberately leave lastUpdated alone.
-        if result.items.isEmpty && !symbols.isEmpty {
-            errorMessage = "Couldn't refresh — showing last update"
-            api.invalidateAuth()
-            isLoading = false
-            return
-        }
-
-        // Fetch v7 quote data for pre/post market prices (single batch call)
-        var enriched = result.items
-        if let crumbValue = api.currentCrumb, !symbols.isEmpty {
-            let v7Data = await api.fetchV7Quotes(symbols: symbols, crumb: crumbValue)
-            for i in enriched.indices {
-                if let extra = v7Data[enriched[i].symbol] {
-                    enriched[i].postMarketPrice = extra.postMarketPrice
-                    enriched[i].postMarketChange = extra.postMarketChange
-                    enriched[i].preMarketPrice = extra.preMarketPrice
-                    enriched[i].preMarketChange = extra.preMarketChange
-                    enriched[i].marketState = extra.marketState
-                    enriched[i].fiftyTwoWeekHigh = extra.fiftyTwoWeekHigh
-                    enriched[i].fiftyTwoWeekLow = extra.fiftyTwoWeekLow
+            // If every symbol failed with an auth error, the crumb/cookie has likely
+            // expired. Re-authenticate and retry once — the same recovery a manual
+            // refresh used to perform, now done automatically.
+            if result.items.isEmpty && result.authFailures > 0 {
+                api.invalidateAuth()
+                do {
+                    try await api.ensureAuth()
+                    result = await api.fetchQuotes(symbols: symbols, crumb: api.currentCrumb)
+                } catch {
+                    // Re-auth failed; fall through to keep-last-good handling below.
                 }
             }
+
+            // Genuine total failure (after the retry). Keep the last good data so the
+            // menu bar doesn't blank out, surface a soft message, and invalidate auth
+            // so the next cycle re-authenticates. Deliberately leave lastUpdated alone.
+            if result.items.isEmpty && !symbols.isEmpty {
+                errorMessage = "Couldn't refresh — showing last update"
+                api.invalidateAuth()
+                isLoading = false
+                return
+            }
+
+            // Fetch v7 quote data for pre/post market prices (single batch call)
+            var perSymbol = result.items
+            if let crumbValue = api.currentCrumb, !symbols.isEmpty {
+                let v7Data = await api.fetchV7Quotes(symbols: symbols, crumb: crumbValue)
+                for i in perSymbol.indices {
+                    if let extra = v7Data[perSymbol[i].symbol] {
+                        perSymbol[i].postMarketPrice = extra.postMarketPrice
+                        perSymbol[i].postMarketChange = extra.postMarketChange
+                        perSymbol[i].preMarketPrice = extra.preMarketPrice
+                        perSymbol[i].preMarketChange = extra.preMarketChange
+                        perSymbol[i].marketState = extra.marketState
+                        perSymbol[i].fiftyTwoWeekHigh = extra.fiftyTwoWeekHigh
+                        perSymbol[i].fiftyTwoWeekLow = extra.fiftyTwoWeekLow
+                    }
+                }
+            }
+            enriched = perSymbol
         }
 
         // Fetch exchange rates for portfolio currency conversion
@@ -951,6 +964,106 @@ final class YahooFinanceClient {
         } catch {
             return [:]
         }
+    }
+
+    // MARK: - Batch fetching (v7 quote + v8 spark)
+
+    nonisolated static func sparkURL(symbols: [String], crumb: String) -> URL? {
+        yahooURL(path: "/v8/finance/spark", query: [
+            ("symbols", symbols.joined(separator: ",")),
+            ("range", "1d"),
+            ("interval", "5m"),
+            ("crumb", crumb),
+        ])
+    }
+
+    /// Two batched calls (v7 quote + v8 spark) covering the whole watchlist,
+    /// instead of one chart request per symbol. Returns fully-populated items
+    /// ONLY when both calls cover every symbol with a usable sparkline;
+    /// otherwise nil, so the caller falls back to the per-symbol path and the
+    /// display is never degraded by a partial/unexpected batch response.
+    func fetchBatch(symbols: [String], crumb: String?) async -> [StockItem]? {
+        guard let crumb, !symbols.isEmpty,
+              let v7url = Self.quoteURL(symbols: symbols, crumb: crumb),
+              let sparkurl = Self.sparkURL(symbols: symbols, crumb: crumb) else { return nil }
+
+        async let v7Resp = Self.session.data(from: v7url)
+        async let sparkResp = Self.session.data(from: sparkurl)
+        do {
+            let (v7data, v7r) = try await v7Resp
+            let (sparkdata, sparkr) = try await sparkResp
+            guard (v7r as? HTTPURLResponse)?.statusCode == 200,
+                  (sparkr as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+
+            let quotes = Self.parseV7Full(data: v7data)
+            let sparks = Self.parseSpark(data: sparkdata)
+
+            var items: [StockItem] = []
+            for sym in symbols {
+                guard var item = quotes[sym],
+                      let series = sparks[sym], series.count >= 2 else { return nil }
+                item.intradayPrices = series
+                items.append(item)
+            }
+            return items
+        } catch {
+            return nil
+        }
+    }
+
+    /// Parse a v7 quote response into fully-populated StockItems (price,
+    /// previous close, name, timezone, currency, day range, pre/post market,
+    /// 52-week range, market state).
+    nonisolated static func parseV7Full(data: Data) -> [String: StockItem] {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let quoteResponse = json["quoteResponse"] as? [String: Any],
+              let results = quoteResponse["result"] as? [[String: Any]] else { return [:] }
+
+        var dict: [String: StockItem] = [:]
+        for q in results {
+            guard let symbol = q["symbol"] as? String,
+                  let price = q["regularMarketPrice"] as? Double,
+                  let prevClose = q["regularMarketPreviousClose"] as? Double else { continue }
+            let name = (q["longName"] as? String) ?? (q["shortName"] as? String)
+                ?? (q["displayName"] as? String) ?? symbol
+            var item = StockItem(
+                symbol: symbol, name: name, price: price, previousClose: prevClose,
+                exchangeTimezoneName: q["exchangeTimezoneName"] as? String,
+                currency: q["currency"] as? String,
+                intradayPrices: [],
+                dayHigh: q["regularMarketDayHigh"] as? Double,
+                dayLow: q["regularMarketDayLow"] as? Double
+            )
+            item.postMarketPrice = q["postMarketPrice"] as? Double
+            item.postMarketChange = q["postMarketChange"] as? Double
+            item.preMarketPrice = q["preMarketPrice"] as? Double
+            item.preMarketChange = q["preMarketChange"] as? Double
+            item.marketState = q["marketState"] as? String
+            item.fiftyTwoWeekHigh = q["fiftyTwoWeekHigh"] as? Double
+            item.fiftyTwoWeekLow = q["fiftyTwoWeekLow"] as? Double
+            dict[symbol] = item
+        }
+        return dict
+    }
+
+    /// Parse a v8 spark response into intraday close series per symbol.
+    nonisolated static func parseSpark(data: Data) -> [String: [Double]] {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let spark = json["spark"] as? [String: Any],
+              let results = spark["result"] as? [[String: Any]] else { return [:] }
+
+        var dict: [String: [Double]] = [:]
+        for r in results {
+            guard let symbol = r["symbol"] as? String,
+                  let responses = r["response"] as? [[String: Any]],
+                  let first = responses.first,
+                  let indicators = first["indicators"] as? [String: Any],
+                  let quotes = indicators["quote"] as? [[String: Any]],
+                  let quote = quotes.first,
+                  let closes = quote["close"] as? [Any] else { continue }
+            dict[symbol] = closes.compactMap { $0 as? Double }
+        }
+        return dict
     }
 
     // MARK: - Symbol Search

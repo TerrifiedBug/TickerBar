@@ -600,6 +600,49 @@ final class StockServiceTests: XCTestCase {
         XCTAssertFalse(service.priceAlerts[0].armed)
     }
 
+    // MARK: - Batch parsing (plan 012: v7 quote + v8 spark fast path)
+
+    func testParseV7FullExtractsCoreFields() {
+        let json = """
+        {"quoteResponse":{"result":[
+          {"symbol":"AAPL","regularMarketPrice":185.0,"regularMarketPreviousClose":183.0,
+           "longName":"Apple Inc.","exchangeTimezoneName":"America/New_York","currency":"USD",
+           "regularMarketDayHigh":186.0,"regularMarketDayLow":182.0,"marketState":"REGULAR",
+           "fiftyTwoWeekHigh":200.0,"fiftyTwoWeekLow":150.0}
+        ]}}
+        """.data(using: .utf8)!
+        let aapl = YahooFinanceClient.parseV7Full(data: json)["AAPL"]
+        XCTAssertEqual(aapl?.price, 185.0)
+        XCTAssertEqual(aapl?.previousClose, 183.0)
+        XCTAssertEqual(aapl?.name, "Apple Inc.")
+        XCTAssertEqual(aapl?.currency, "USD")
+        XCTAssertEqual(aapl?.marketState, "REGULAR")
+        XCTAssertEqual(aapl?.fiftyTwoWeekHigh, 200.0)
+    }
+
+    func testParseV7FullSkipsItemsMissingPrice() {
+        let json = #"{"quoteResponse":{"result":[{"symbol":"BAD","currency":"USD"}]}}"#.data(using: .utf8)!
+        XCTAssertTrue(YahooFinanceClient.parseV7Full(data: json).isEmpty)
+    }
+
+    func testParseSparkExtractsCloses() {
+        let json = """
+        {"spark":{"result":[
+          {"symbol":"AAPL","response":[{"indicators":{"quote":[{"close":[1.0,2.0,3.0]}]}}]}
+        ],"error":null}}
+        """.data(using: .utf8)!
+        XCTAssertEqual(YahooFinanceClient.parseSpark(data: json)["AAPL"], [1.0, 2.0, 3.0])
+    }
+
+    func testSparkURLEncodesCrumb() {
+        let url = YahooFinanceClient.sparkURL(symbols: ["AAPL", "MSFT"], crumb: "a+b")
+        XCTAssertNotNil(url)
+        let s = url!.absoluteString
+        XCTAssertTrue(s.contains("/v8/finance/spark"), s)
+        XCTAssertTrue(s.contains("symbols=AAPL,MSFT"), s)
+        XCTAssertTrue(s.contains("crumb=a%2Bb"), s)
+    }
+
     func testLegacyAlertDecodesWithDefaults() {
         let legacy = """
         {"id":"\(UUID().uuidString)","symbol":"AAPL","targetPrice":100,"isAbove":true,"armed":false}
