@@ -103,4 +103,24 @@ final class StockItemTests: XCTestCase {
         let usd = StockItem(symbol: "AAPL", name: "Apple", price: 185.0, previousClose: 183.0, currency: "USD")
         XCTAssertEqual(usd.displayPrice, 185.0, accuracy: 0.0001)
     }
+
+    // MARK: - PortfolioCalculator (pure)
+
+    func testPortfolioCalculatorValueAndGain() {
+        let stocks = [StockItem(symbol: "AAPL", name: "Apple", price: 130, previousClose: 130, currency: "USD")]
+        let holdings: [String: [StockService.Holding]] = [
+            "AAPL": [StockService.Holding(kind: .purchase, shares: 10, costBasis: 100)]
+        ]
+        XCTAssertEqual(PortfolioCalculator.totalValue(stocks: stocks, holdings: holdings, baseCurrency: "USD", rates: [:]), 1300, accuracy: 0.001)
+        XCTAssertEqual(PortfolioCalculator.gain(stocks: stocks, holdings: holdings, baseCurrency: "USD", rates: [:]), 300, accuracy: 0.001)
+    }
+
+    func testPortfolioCalculatorExcludesMissingRate() {
+        let stocks = [StockItem(symbol: "7203.T", name: "Toyota", price: 3000, previousClose: 3000, currency: "JPY")]
+        let holdings: [String: [StockService.Holding]] = [
+            "7203.T": [StockService.Holding(kind: .purchase, shares: 10, costBasis: 2000)]
+        ]
+        XCTAssertEqual(PortfolioCalculator.totalValue(stocks: stocks, holdings: holdings, baseCurrency: "USD", rates: [:]), 0, accuracy: 0.001)
+        XCTAssertTrue(PortfolioCalculator.hasUnconverted(stocks: stocks, holdings: holdings, baseCurrency: "USD", rates: [:]))
+    }
 }

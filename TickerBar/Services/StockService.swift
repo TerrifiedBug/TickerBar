@@ -835,62 +835,35 @@ final class StockService {
         return true
     }
 
-    /// Exchange rate from a stock's currency to baseCurrency. Returns nil when a
-    /// required (non-base) rate hasn't been fetched yet, so callers exclude the
-    /// holding instead of silently valuing it at parity — which previously
-    /// mis-stated e.g. a JPY holding ~150x against USD. Rates are re-fetched each
-    /// cycle while holdings exist.
-    private func rateToBase(for stock: StockItem) -> Double? {
-        let cur = CurrencyUnit.majorUnitCode(stock.currency)
-        if cur == baseCurrency { return 1.0 }
-        return exchangeRates[cur]
-    }
+    // Portfolio totals delegate to the pure PortfolioCalculator (testable
+    // without the service); this type just supplies its current state.
 
     var totalPortfolioValue: Double {
-        stocks.reduce(0) { total, stock in
-            guard let rate = rateToBase(for: stock) else { return total }
-            return total + lots(for: stock.symbol).reduce(0) { $0 + stock.displayPrice * $1.shares * rate }
-        }
+        PortfolioCalculator.totalValue(stocks: stocks, holdings: holdings, baseCurrency: baseCurrency, rates: exchangeRates)
     }
 
     var totalPortfolioCost: Double {
-        stocks.reduce(0) { total, stock in
-            guard let rate = rateToBase(for: stock) else { return total }
-            return total + lots(for: stock.symbol).reduce(0) { acc, lot in
-                guard let cost = lot.costBasis else { return acc }
-                return acc + cost * lot.shares * rate
-            }
-        }
-    }
-
-    /// Current value of only the cost-bearing lots — the basis for gain so a
-    /// mixed RSU + purchase portfolio compares like with like.
-    private var costBasisLotsValue: Double {
-        stocks.reduce(0) { total, stock in
-            guard let rate = rateToBase(for: stock) else { return total }
-            return total + lots(for: stock.symbol).reduce(0) { acc, lot in
-                lot.costBasis == nil ? acc : acc + stock.displayPrice * lot.shares * rate
-            }
-        }
+        PortfolioCalculator.totalCost(stocks: stocks, holdings: holdings, baseCurrency: baseCurrency, rates: exchangeRates)
     }
 
     var totalPortfolioGain: Double {
-        costBasisLotsValue - totalPortfolioCost
+        PortfolioCalculator.gain(stocks: stocks, holdings: holdings, baseCurrency: baseCurrency, rates: exchangeRates)
     }
 
     var totalPortfolioGainPercent: Double {
-        totalPortfolioCost > 0 ? (totalPortfolioGain / totalPortfolioCost) * 100 : 0
+        let cost = totalPortfolioCost
+        return cost > 0 ? (totalPortfolioGain / cost) * 100 : 0
     }
 
     /// True when at least one lot has a cost basis, so gain/loss is meaningful.
     var hasCostBasis: Bool {
-        holdings.values.contains { lots in lots.contains { $0.costBasis != nil } }
+        PortfolioCalculator.hasCostBasis(holdings: holdings)
     }
 
     /// True when a held symbol's currency has no known FX rate to the base
     /// currency yet, so portfolio totals currently exclude that symbol's lots.
     var hasUnconvertedHoldings: Bool {
-        stocks.contains { !lots(for: $0.symbol).isEmpty && rateToBase(for: $0) == nil }
+        PortfolioCalculator.hasUnconverted(stocks: stocks, holdings: holdings, baseCurrency: baseCurrency, rates: exchangeRates)
     }
 
     var baseCurrencySymbol: String {
