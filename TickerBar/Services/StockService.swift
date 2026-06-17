@@ -98,22 +98,11 @@ final class StockService {
     private var refreshTimer: Timer?
     private var rotationTimer: Timer?
 
-    // MARK: - Auth State (cookie + crumb for Yahoo Finance)
-    private var crumb: String?
-    private static let session: URLSession = {
-        let config = URLSessionConfiguration.default
-        config.httpCookieAcceptPolicy = .always
-        config.httpShouldSetCookies = true
-        config.httpCookieStorage = HTTPCookieStorage.shared
-        config.httpAdditionalHeaders = [
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ]
-        return URLSession(configuration: config)
-    }()
+    // MARK: - Networking (all Yahoo HTTP/auth/parse lives in YahooFinanceClient)
+    private let api = YahooFinanceClient()
 
     // MARK: - Constants
     nonisolated static let defaultWatchlist = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"]
-    nonisolated private static let baseURL = "https://query2.finance.yahoo.com"
 
     // MARK: - Persistence
     private let defaults: UserDefaults
@@ -275,113 +264,6 @@ final class StockService {
         return stocks.contains { Self.isOpen($0) }
     }
 
-    // MARK: - Cookie + Crumb Authentication
-    //
-    // Yahoo Finance requires a session cookie + crumb token for API access.
-    // Flow (based on yfinance library):
-    //   1. GET https://fc.yahoo.com -> sets Yahoo session cookie (response 404s, but cookie is set)
-    //   2. GET https://query2.finance.yahoo.com/v1/test/getcrumb -> returns plaintext crumb
-    //   3. Append &crumb={crumb} to all API requests
-
-    private func ensureAuth() async throws {
-        if crumb != nil { return }
-
-        // Step 1: Get cookie by hitting fc.yahoo.com
-        let cookieURL = URL(string: "https://fc.yahoo.com")!
-        let _ = try? await Self.session.data(from: cookieURL)
-
-        // Step 2: Get crumb using the cookie
-        let crumbURL = URL(string: "\(Self.baseURL)/v1/test/getcrumb")!
-        let (crumbData, crumbResponse) = try await Self.session.data(from: crumbURL)
-
-        guard let httpResponse = crumbResponse as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw StockServiceError.authError
-        }
-
-        guard let crumbString = String(data: crumbData, encoding: .utf8),
-              !crumbString.isEmpty,
-              !crumbString.contains("<html>") else {
-            throw StockServiceError.authError
-        }
-
-        self.crumb = crumbString
-    }
-
-    /// Invalidate auth so next request re-fetches cookie + crumb
-    private func invalidateAuth() {
-        crumb = nil
-    }
-
-    // MARK: - URL Building
-    //
-    // Yahoo crumbs commonly contain '+', '/', and '='. A raw interpolated URL,
-    // or `.urlQueryAllowed` over a whole URL string, leaves '+' intact — and a
-    // server decodes a query '+' as a space, corrupting the crumb. We build
-    // every request with explicit per-component encoding so '+', '&', '#', '='
-    // in a value are escaped, and symbols like "^GSPC" resolve in the path.
-
-    /// Percent-encode a value for safe use as a URL *query value*, escaping the
-    /// sub-delimiters that change a query's meaning ('+' decodes to space; '&',
-    /// '=', '#', '?' delimit). Commas survive so `symbols=A,B` stays intact.
-    nonisolated static func encodedQueryValue(_ value: String) -> String {
-        var allowed = CharacterSet.urlQueryAllowed
-        allowed.remove(charactersIn: "+&=#?")
-        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
-    }
-
-    private nonisolated static func yahooURL(path: String, query: [(name: String, value: String)]) -> URL? {
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "query2.finance.yahoo.com"
-        components.path = path
-        components.percentEncodedQuery = query
-            .map { "\($0.name)=\(encodedQueryValue($0.value))" }
-            .joined(separator: "&")
-        return components.url
-    }
-
-    /// v8 chart URL — the symbol is a path segment, so encode it (escapes '^'
-    /// in index symbols like "^GSPC", which previously made `URL(string:)` nil).
-    nonisolated static func chartURL(symbol: String, crumb: String) -> URL? {
-        var pathAllowed = CharacterSet.urlPathAllowed
-        pathAllowed.remove(charactersIn: "/")
-        let encodedSymbol = symbol.addingPercentEncoding(withAllowedCharacters: pathAllowed) ?? symbol
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "query2.finance.yahoo.com"
-        components.percentEncodedPath = "/v8/finance/chart/\(encodedSymbol)"
-        components.percentEncodedQuery = "interval=5m&range=1d&crumb=\(encodedQueryValue(crumb))"
-        return components.url
-    }
-
-    /// v7 batch quote URL (used for quote enrichment and FX rates).
-    nonisolated static func quoteURL(symbols: [String], crumb: String) -> URL? {
-        yahooURL(path: "/v7/finance/quote", query: [
-            ("symbols", symbols.joined(separator: ",")),
-            ("formatted", "false"),
-            ("crumb", crumb),
-        ])
-    }
-
-    /// v1 symbol search URL.
-    nonisolated static func searchURL(query: String) -> URL? {
-        yahooURL(path: "/v1/finance/search", query: [
-            ("q", query),
-            ("quotesCount", "6"),
-            ("newsCount", "0"),
-            ("listsCount", "0"),
-        ])
-    }
-
-    // MARK: - Networking
-
-    private enum FetchOutcome: Sendable {
-        case success(StockItem)
-        case authFailure
-        case failure
-    }
-
     func fetchAllQuotes(isTimerTriggered: Bool = false) async {
         // Only skip fetching for automatic timer refreshes when all markets are closed.
         // Manual refreshes, initial load, and add-stock fetches always proceed.
@@ -393,7 +275,7 @@ final class StockService {
 
         // Ensure we have a valid crumb before fetching
         do {
-            try await ensureAuth()
+            try await api.ensureAuth()
         } catch {
             errorMessage = "Authentication failed"
             isLoading = false
@@ -403,16 +285,16 @@ final class StockService {
         let symbols = watchlist
 
         // First attempt with the current crumb.
-        var result = await fetchQuotes(symbols: symbols, crumb: crumb)
+        var result = await api.fetchQuotes(symbols: symbols, crumb: api.currentCrumb)
 
         // If every symbol failed with an auth error, the crumb/cookie has likely
         // expired. Re-authenticate and retry once — the same recovery a manual
         // refresh used to perform, now done automatically.
         if result.items.isEmpty && result.authFailures > 0 {
-            invalidateAuth()
+            api.invalidateAuth()
             do {
-                try await ensureAuth()
-                result = await fetchQuotes(symbols: symbols, crumb: crumb)
+                try await api.ensureAuth()
+                result = await api.fetchQuotes(symbols: symbols, crumb: api.currentCrumb)
             } catch {
                 // Re-auth failed; fall through to keep-last-good handling below.
             }
@@ -423,15 +305,15 @@ final class StockService {
         // so the next cycle re-authenticates. Deliberately leave lastUpdated alone.
         if result.items.isEmpty && !symbols.isEmpty {
             errorMessage = "Couldn't refresh — showing last update"
-            invalidateAuth()
+            api.invalidateAuth()
             isLoading = false
             return
         }
 
         // Fetch v7 quote data for pre/post market prices (single batch call)
         var enriched = result.items
-        if let crumbValue = crumb, !symbols.isEmpty {
-            let v7Data = await Self.fetchV7Quotes(symbols: symbols, crumb: crumbValue)
+        if let crumbValue = api.currentCrumb, !symbols.isEmpty {
+            let v7Data = await api.fetchV7Quotes(symbols: symbols, crumb: crumbValue)
             for i in enriched.indices {
                 if let extra = v7Data[enriched[i].symbol] {
                     enriched[i].postMarketPrice = extra.postMarketPrice
@@ -446,7 +328,7 @@ final class StockService {
         }
 
         // Fetch exchange rates for portfolio currency conversion
-        if let crumbValue = crumb, !holdings.isEmpty {
+        if let crumbValue = api.currentCrumb, !holdings.isEmpty {
             let currencies = Set(enriched.compactMap { stock -> String? in
                 guard holdings[stock.symbol] != nil else { return nil }
                 return CurrencyUnit.majorUnitCode(stock.currency)
@@ -454,7 +336,7 @@ final class StockService {
             let neededRates = currencies.filter { $0 != baseCurrency }
             if !neededRates.isEmpty {
                 let rateSymbols = neededRates.map { "\($0)\(baseCurrency)=X" }
-                let rates = await Self.fetchExchangeRates(symbols: Array(rateSymbols), crumb: crumbValue)
+                let rates = await api.fetchExchangeRates(symbols: Array(rateSymbols), crumb: crumbValue)
                 for (pair, rate) in rates {
                     // Extract source currency from "GBPUSD=X" -> "GBP"
                     let source = String(pair.prefix(3))
@@ -489,155 +371,6 @@ final class StockService {
         }
     }
 
-    /// Fetch all symbols concurrently. Returns successfully-parsed items plus a
-    /// count of auth failures (HTTP 401/403) so the caller can decide whether to
-    /// re-authenticate and retry.
-    private func fetchQuotes(symbols: [String], crumb: String?) async -> (items: [StockItem], authFailures: Int) {
-        await withTaskGroup(of: FetchOutcome.self) { group in
-            for symbol in symbols {
-                group.addTask {
-                    await Self.fetchQuote(for: symbol, crumb: crumb)
-                }
-            }
-            var items: [StockItem] = []
-            var authFailures = 0
-            for await outcome in group {
-                switch outcome {
-                case .success(let stock): items.append(stock)
-                case .authFailure: authFailures += 1
-                case .failure: break
-                }
-            }
-            return (items: items, authFailures: authFailures)
-        }
-    }
-
-    private nonisolated static func fetchQuote(for symbol: String, crumb: String?) async -> FetchOutcome {
-        guard let crumb else { return .failure }
-        guard let url = chartURL(symbol: symbol, crumb: crumb) else { return .failure }
-
-        do {
-            let (data, response) = try await session.data(from: url)
-
-            if let httpResponse = response as? HTTPURLResponse,
-               httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-                return .authFailure
-            }
-
-            return .success(try parseQuoteResponse(data: data))
-        } catch {
-            return .failure
-        }
-    }
-
-    nonisolated static func parseQuoteResponse(data: Data) throws -> StockItem {
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let chart = json?["chart"] as? [String: Any],
-              let results = chart["result"] as? [[String: Any]],
-              let result = results.first,
-              let meta = result["meta"] as? [String: Any],
-              let symbol = meta["symbol"] as? String,
-              let price = meta["regularMarketPrice"] as? Double,
-              let previousClose = meta["chartPreviousClose"] as? Double
-        else {
-            throw StockServiceError.parseError
-        }
-
-        let name = meta["longName"] as? String
-            ?? meta["shortName"] as? String
-            ?? symbol
-        let exchangeTZ = meta["exchangeTimezoneName"] as? String
-        let currency = meta["currency"] as? String
-
-        // Parse intraday close prices for sparkline
-        var intradayPrices: [Double] = []
-        if let indicators = result["indicators"] as? [String: Any],
-           let quotes = indicators["quote"] as? [[String: Any]],
-           let quote = quotes.first,
-           let closes = quote["close"] as? [Any] {
-            intradayPrices = closes.compactMap { $0 as? Double }
-        }
-
-        // Day high/low from meta
-        let dayHigh = meta["regularMarketDayHigh"] as? Double
-        let dayLow = meta["regularMarketDayLow"] as? Double
-
-        return StockItem(symbol: symbol, name: name, price: price, previousClose: previousClose, exchangeTimezoneName: exchangeTZ, currency: currency, intradayPrices: intradayPrices, dayHigh: dayHigh, dayLow: dayLow)
-    }
-
-    // MARK: - V7 Quote (pre/post market, market state)
-
-    struct V7QuoteData {
-        var postMarketPrice: Double?
-        var postMarketChange: Double?
-        var preMarketPrice: Double?
-        var preMarketChange: Double?
-        var marketState: String?
-        var fiftyTwoWeekHigh: Double?
-        var fiftyTwoWeekLow: Double?
-    }
-
-    /// Batch fetch v7 quote data for all symbols (single HTTP call).
-    private nonisolated static func fetchV7Quotes(symbols: [String], crumb: String) async -> [String: V7QuoteData] {
-        guard let url = quoteURL(symbols: symbols, crumb: crumb) else { return [:] }
-
-        do {
-            let (data, response) = try await session.data(from: url)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else { return [:] }
-
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            guard let quoteResponse = json?["quoteResponse"] as? [String: Any],
-                  let results = quoteResponse["result"] as? [[String: Any]] else { return [:] }
-
-            var dict: [String: V7QuoteData] = [:]
-            for quote in results {
-                guard let symbol = quote["symbol"] as? String else { continue }
-                dict[symbol] = V7QuoteData(
-                    postMarketPrice: quote["postMarketPrice"] as? Double,
-                    postMarketChange: quote["postMarketChange"] as? Double,
-                    preMarketPrice: quote["preMarketPrice"] as? Double,
-                    preMarketChange: quote["preMarketChange"] as? Double,
-                    marketState: quote["marketState"] as? String,
-                    fiftyTwoWeekHigh: quote["fiftyTwoWeekHigh"] as? Double,
-                    fiftyTwoWeekLow: quote["fiftyTwoWeekLow"] as? Double
-                )
-            }
-            return dict
-        } catch {
-            return [:]
-        }
-    }
-
-    // MARK: - Exchange Rates
-
-    /// Fetch exchange rates via v7/quote (e.g. symbols = ["GBPUSD=X", "EURUSD=X"])
-    private nonisolated static func fetchExchangeRates(symbols: [String], crumb: String) async -> [String: Double] {
-        guard let url = quoteURL(symbols: symbols, crumb: crumb) else { return [:] }
-
-        do {
-            let (data, response) = try await session.data(from: url)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else { return [:] }
-
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            guard let quoteResponse = json?["quoteResponse"] as? [String: Any],
-                  let results = quoteResponse["result"] as? [[String: Any]] else { return [:] }
-
-            var rates: [String: Double] = [:]
-            for quote in results {
-                guard let symbol = quote["symbol"] as? String,
-                      let price = quote["regularMarketPrice"] as? Double else { continue }
-                // Symbol is like "GBPUSD=X", we store "GBP" -> rate
-                let source = String(symbol.prefix(3))
-                rates[source] = price
-            }
-            return rates
-        } catch {
-            return [:]
-        }
-    }
-
     // MARK: - Watchlist Management
 
     func addSymbol(_ symbol: String) {
@@ -649,12 +382,12 @@ final class StockService {
     /// Validate a ticker by attempting to fetch its quote. Returns nil on success, or an error message.
     func validateSymbol(_ symbol: String) async -> String? {
         do {
-            try await ensureAuth()
+            try await api.ensureAuth()
         } catch {
             return "Unable to validate (auth failed)"
         }
 
-        switch await Self.fetchQuote(for: symbol, crumb: crumb) {
+        switch await api.fetchSingle(symbol) {
         case .success:
             return nil
         case .authFailure:
@@ -890,25 +623,8 @@ final class StockService {
     func searchSymbols(_ query: String) async -> [SymbolSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
-
-        guard let url = Self.searchURL(query: trimmed) else { return [] }
-
-        do {
-            let (data, response) = try await Self.session.data(from: url)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else { return [] }
-
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            guard let quotes = json?["quotes"] as? [[String: Any]] else { return [] }
-
-            return quotes.compactMap { quote in
-                guard let symbol = quote["symbol"] as? String,
-                      let name = (quote["shortname"] as? String) ?? (quote["longname"] as? String) else { return nil }
-                let exchange = quote["exchDisp"] as? String ?? ""
-                return SymbolSearchResult(symbol: symbol, name: name, exchange: exchange)
-            }
-        } catch {
-            return []
+        return await api.searchRaw(trimmed).map {
+            SymbolSearchResult(symbol: $0.symbol, name: $0.name, exchange: $0.exchange)
         }
     }
 
@@ -950,12 +666,6 @@ final class StockService {
         }
     }
 
-    // MARK: - Errors
-
-    enum StockServiceError: Error {
-        case parseError
-        case authError
-    }
 }
 
 // MARK: - Helpers
@@ -963,5 +673,308 @@ final class StockService {
 private extension Double {
     var nonZero: Double? {
         self == 0 ? nil : self
+    }
+}
+
+// MARK: - YahooFinanceClient
+//
+// All Yahoo Finance HTTP, cookie+crumb auth, URL building, and JSON parsing.
+// Extracted from StockService so the networking is a focused, separately
+// reasoned-about unit; StockService is now a thin @Observable coordinator that
+// owns app state and delegates fetching here.
+@MainActor
+final class YahooFinanceClient {
+    private var crumb: String?
+    var currentCrumb: String? { crumb }
+
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.httpCookieAcceptPolicy = .always
+        config.httpShouldSetCookies = true
+        config.httpCookieStorage = HTTPCookieStorage.shared
+        config.httpAdditionalHeaders = [
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ]
+        return URLSession(configuration: config)
+    }()
+
+    nonisolated private static let baseURL = "https://query2.finance.yahoo.com"
+
+    enum YahooError: Error {
+        case parseError
+        case authError
+    }
+
+    // MARK: - Cookie + Crumb Authentication
+    //
+    // Yahoo Finance requires a session cookie + crumb token for API access.
+    //   1. GET https://fc.yahoo.com -> sets Yahoo session cookie (404s, cookie set)
+    //   2. GET .../v1/test/getcrumb -> returns plaintext crumb
+    //   3. Append &crumb={crumb} to all API requests
+
+    func ensureAuth() async throws {
+        if crumb != nil { return }
+
+        let cookieURL = URL(string: "https://fc.yahoo.com")!
+        let _ = try? await Self.session.data(from: cookieURL)
+
+        let crumbURL = URL(string: "\(Self.baseURL)/v1/test/getcrumb")!
+        let (crumbData, crumbResponse) = try await Self.session.data(from: crumbURL)
+
+        guard let httpResponse = crumbResponse as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw YahooError.authError
+        }
+
+        guard let crumbString = String(data: crumbData, encoding: .utf8),
+              !crumbString.isEmpty,
+              !crumbString.contains("<html>") else {
+            throw YahooError.authError
+        }
+
+        self.crumb = crumbString
+    }
+
+    /// Invalidate auth so the next request re-fetches cookie + crumb.
+    func invalidateAuth() {
+        crumb = nil
+    }
+
+    // MARK: - URL Building
+    //
+    // Yahoo crumbs commonly contain '+', '/', and '='. A raw interpolated URL,
+    // or `.urlQueryAllowed` over a whole URL string, leaves '+' intact — and a
+    // server decodes a query '+' as a space, corrupting the crumb. Build every
+    // request with explicit per-component encoding so '+', '&', '#', '=' in a
+    // value are escaped, and symbols like "^GSPC" resolve in the path.
+
+    nonisolated static func encodedQueryValue(_ value: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "+&=#?")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    private nonisolated static func yahooURL(path: String, query: [(name: String, value: String)]) -> URL? {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "query2.finance.yahoo.com"
+        components.path = path
+        components.percentEncodedQuery = query
+            .map { "\($0.name)=\(encodedQueryValue($0.value))" }
+            .joined(separator: "&")
+        return components.url
+    }
+
+    nonisolated static func chartURL(symbol: String, crumb: String) -> URL? {
+        var pathAllowed = CharacterSet.urlPathAllowed
+        pathAllowed.remove(charactersIn: "/")
+        let encodedSymbol = symbol.addingPercentEncoding(withAllowedCharacters: pathAllowed) ?? symbol
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "query2.finance.yahoo.com"
+        components.percentEncodedPath = "/v8/finance/chart/\(encodedSymbol)"
+        components.percentEncodedQuery = "interval=5m&range=1d&crumb=\(encodedQueryValue(crumb))"
+        return components.url
+    }
+
+    nonisolated static func quoteURL(symbols: [String], crumb: String) -> URL? {
+        yahooURL(path: "/v7/finance/quote", query: [
+            ("symbols", symbols.joined(separator: ",")),
+            ("formatted", "false"),
+            ("crumb", crumb),
+        ])
+    }
+
+    nonisolated static func searchURL(query: String) -> URL? {
+        yahooURL(path: "/v1/finance/search", query: [
+            ("q", query),
+            ("quotesCount", "6"),
+            ("newsCount", "0"),
+            ("listsCount", "0"),
+        ])
+    }
+
+    // MARK: - Quote fetching
+
+    enum FetchOutcome: Sendable {
+        case success(StockItem)
+        case authFailure
+        case failure
+    }
+
+    /// Fetch all symbols concurrently. Returns successfully-parsed items plus a
+    /// count of auth failures (HTTP 401/403) so the caller can decide whether to
+    /// re-authenticate and retry.
+    func fetchQuotes(symbols: [String], crumb: String?) async -> (items: [StockItem], authFailures: Int) {
+        await withTaskGroup(of: FetchOutcome.self) { group in
+            for symbol in symbols {
+                group.addTask {
+                    await Self.fetchQuote(for: symbol, crumb: crumb)
+                }
+            }
+            var items: [StockItem] = []
+            var authFailures = 0
+            for await outcome in group {
+                switch outcome {
+                case .success(let stock): items.append(stock)
+                case .authFailure: authFailures += 1
+                case .failure: break
+                }
+            }
+            return (items: items, authFailures: authFailures)
+        }
+    }
+
+    /// Fetch a single symbol's quote (used for ticker validation).
+    func fetchSingle(_ symbol: String) async -> FetchOutcome {
+        await Self.fetchQuote(for: symbol, crumb: crumb)
+    }
+
+    nonisolated static func fetchQuote(for symbol: String, crumb: String?) async -> FetchOutcome {
+        guard let crumb else { return .failure }
+        guard let url = chartURL(symbol: symbol, crumb: crumb) else { return .failure }
+
+        do {
+            let (data, response) = try await session.data(from: url)
+
+            if let httpResponse = response as? HTTPURLResponse,
+               httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                return .authFailure
+            }
+
+            return .success(try parseQuoteResponse(data: data))
+        } catch {
+            return .failure
+        }
+    }
+
+    nonisolated static func parseQuoteResponse(data: Data) throws -> StockItem {
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let chart = json?["chart"] as? [String: Any],
+              let results = chart["result"] as? [[String: Any]],
+              let result = results.first,
+              let meta = result["meta"] as? [String: Any],
+              let symbol = meta["symbol"] as? String,
+              let price = meta["regularMarketPrice"] as? Double,
+              let previousClose = meta["chartPreviousClose"] as? Double
+        else {
+            throw YahooError.parseError
+        }
+
+        let name = meta["longName"] as? String
+            ?? meta["shortName"] as? String
+            ?? symbol
+        let exchangeTZ = meta["exchangeTimezoneName"] as? String
+        let currency = meta["currency"] as? String
+
+        var intradayPrices: [Double] = []
+        if let indicators = result["indicators"] as? [String: Any],
+           let quotes = indicators["quote"] as? [[String: Any]],
+           let quote = quotes.first,
+           let closes = quote["close"] as? [Any] {
+            intradayPrices = closes.compactMap { $0 as? Double }
+        }
+
+        let dayHigh = meta["regularMarketDayHigh"] as? Double
+        let dayLow = meta["regularMarketDayLow"] as? Double
+
+        return StockItem(symbol: symbol, name: name, price: price, previousClose: previousClose, exchangeTimezoneName: exchangeTZ, currency: currency, intradayPrices: intradayPrices, dayHigh: dayHigh, dayLow: dayLow)
+    }
+
+    // MARK: - V7 Quote (pre/post market, market state)
+
+    struct V7QuoteData {
+        var postMarketPrice: Double?
+        var postMarketChange: Double?
+        var preMarketPrice: Double?
+        var preMarketChange: Double?
+        var marketState: String?
+        var fiftyTwoWeekHigh: Double?
+        var fiftyTwoWeekLow: Double?
+    }
+
+    /// Batch fetch v7 quote data for all symbols (single HTTP call).
+    func fetchV7Quotes(symbols: [String], crumb: String) async -> [String: V7QuoteData] {
+        guard let url = Self.quoteURL(symbols: symbols, crumb: crumb) else { return [:] }
+
+        do {
+            let (data, response) = try await Self.session.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else { return [:] }
+
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let quoteResponse = json?["quoteResponse"] as? [String: Any],
+                  let results = quoteResponse["result"] as? [[String: Any]] else { return [:] }
+
+            var dict: [String: V7QuoteData] = [:]
+            for quote in results {
+                guard let symbol = quote["symbol"] as? String else { continue }
+                dict[symbol] = V7QuoteData(
+                    postMarketPrice: quote["postMarketPrice"] as? Double,
+                    postMarketChange: quote["postMarketChange"] as? Double,
+                    preMarketPrice: quote["preMarketPrice"] as? Double,
+                    preMarketChange: quote["preMarketChange"] as? Double,
+                    marketState: quote["marketState"] as? String,
+                    fiftyTwoWeekHigh: quote["fiftyTwoWeekHigh"] as? Double,
+                    fiftyTwoWeekLow: quote["fiftyTwoWeekLow"] as? Double
+                )
+            }
+            return dict
+        } catch {
+            return [:]
+        }
+    }
+
+    // MARK: - Exchange Rates
+
+    /// Fetch exchange rates via v7/quote (e.g. symbols = ["GBPUSD=X", "EURUSD=X"]).
+    func fetchExchangeRates(symbols: [String], crumb: String) async -> [String: Double] {
+        guard let url = Self.quoteURL(symbols: symbols, crumb: crumb) else { return [:] }
+
+        do {
+            let (data, response) = try await Self.session.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else { return [:] }
+
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let quoteResponse = json?["quoteResponse"] as? [String: Any],
+                  let results = quoteResponse["result"] as? [[String: Any]] else { return [:] }
+
+            var rates: [String: Double] = [:]
+            for quote in results {
+                guard let symbol = quote["symbol"] as? String,
+                      let price = quote["regularMarketPrice"] as? Double else { continue }
+                let source = String(symbol.prefix(3))
+                rates[source] = price
+            }
+            return rates
+        } catch {
+            return [:]
+        }
+    }
+
+    // MARK: - Symbol Search
+
+    /// Search for symbols; returns raw tuples the caller maps to its own type.
+    func searchRaw(_ query: String) async -> [(symbol: String, name: String, exchange: String)] {
+        guard let url = Self.searchURL(query: query) else { return [] }
+
+        do {
+            let (data, response) = try await Self.session.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else { return [] }
+
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let quotes = json?["quotes"] as? [[String: Any]] else { return [] }
+
+            return quotes.compactMap { quote in
+                guard let symbol = quote["symbol"] as? String,
+                      let name = (quote["shortname"] as? String) ?? (quote["longname"] as? String) else { return nil }
+                let exchange = quote["exchDisp"] as? String ?? ""
+                return (symbol: symbol, name: name, exchange: exchange)
+            }
+        } catch {
+            return []
+        }
     }
 }

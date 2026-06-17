@@ -122,7 +122,7 @@ final class StockServiceTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        let stock = try StockService.parseQuoteResponse(data: json)
+        let stock = try YahooFinanceClient.parseQuoteResponse(data: json)
         XCTAssertEqual(stock.symbol, "AAPL")
         XCTAssertEqual(stock.name, "Apple Inc.")
         XCTAssertEqual(stock.price, 185.23)
@@ -145,7 +145,7 @@ final class StockServiceTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        let stock = try StockService.parseQuoteResponse(data: json)
+        let stock = try YahooFinanceClient.parseQuoteResponse(data: json)
         XCTAssertEqual(stock.name, "Apple Inc")
     }
 
@@ -158,7 +158,7 @@ final class StockServiceTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        XCTAssertThrowsError(try StockService.parseQuoteResponse(data: json))
+        XCTAssertThrowsError(try YahooFinanceClient.parseQuoteResponse(data: json))
     }
 
     func testParseCrumbResponse() {
@@ -248,7 +248,7 @@ final class StockServiceTests: XCTestCase {
     func testChartURLEscapesPlusInCrumb() {
         // A '+' in a query value must become %2B; servers decode a literal '+'
         // as a space, which corrupts the crumb and breaks auth.
-        let url = StockService.chartURL(symbol: "AAPL", crumb: "ab+cd")
+        let url = YahooFinanceClient.chartURL(symbol: "AAPL", crumb: "ab+cd")
         XCTAssertNotNil(url)
         let s = url!.absoluteString
         XCTAssertTrue(s.contains("crumb=ab%2Bcd"), s)
@@ -257,13 +257,13 @@ final class StockServiceTests: XCTestCase {
 
     func testChartURLResolvesCaretIndexSymbol() {
         // "^GSPC" previously made URL(string:) return nil and silently failed.
-        let url = StockService.chartURL(symbol: "^GSPC", crumb: "x")
+        let url = YahooFinanceClient.chartURL(symbol: "^GSPC", crumb: "x")
         XCTAssertNotNil(url)
         XCTAssertTrue(url!.absoluteString.contains("%5EGSPC"), url!.absoluteString)
     }
 
     func testQuoteURLEscapesPlusAndKeepsCommaSeparator() {
-        let url = StockService.quoteURL(symbols: ["AAPL", "MSFT"], crumb: "a+b")
+        let url = YahooFinanceClient.quoteURL(symbols: ["AAPL", "MSFT"], crumb: "a+b")
         XCTAssertNotNil(url)
         let s = url!.absoluteString
         XCTAssertTrue(s.contains("symbols=AAPL,MSFT"), s)
@@ -271,13 +271,13 @@ final class StockServiceTests: XCTestCase {
     }
 
     func testQuoteURLEscapesEqualsInFXSymbols() {
-        let url = StockService.quoteURL(symbols: ["GBPUSD=X"], crumb: "x")
+        let url = YahooFinanceClient.quoteURL(symbols: ["GBPUSD=X"], crumb: "x")
         XCTAssertNotNil(url)
         XCTAssertTrue(url!.absoluteString.contains("symbols=GBPUSD%3DX"), url!.absoluteString)
     }
 
     func testSearchURLEscapesSpaceAndAmpersand() {
-        let url = StockService.searchURL(query: "a b&c")
+        let url = YahooFinanceClient.searchURL(query: "a b&c")
         XCTAssertNotNil(url)
         let s = url!.absoluteString
         XCTAssertTrue(s.contains("q=a%20b%26c"), s)
