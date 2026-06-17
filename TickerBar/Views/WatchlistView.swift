@@ -518,6 +518,7 @@ struct StockRowView: View {
     let stock: StockItem
     var hasAlert: Bool = false
     var lots: [StockService.Holding] = []
+    @State private var expanded = false
 
     private var tooltipText: String {
         var lines: [String] = []
@@ -551,52 +552,74 @@ struct StockRowView: View {
         return lines.isEmpty ? stock.name : lines.joined(separator: "\n")
     }
 
+    /// Whether any of the extra detail fields are available to show.
+    private var hasDetail: Bool {
+        stock.displayDayHigh != nil || stock.display52WeekHigh != nil
+            || stock.displayPostMarketPrice != nil || stock.displayPreMarketPrice != nil
+    }
+
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(stock.symbol)
-                        .font(.system(.body, design: .monospaced, weight: .semibold))
-                    if hasAlert {
-                        Image(systemName: "bell.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(stock.symbol)
+                            .font(.system(.body, design: .monospaced, weight: .semibold))
+                        if hasAlert {
+                            Image(systemName: "bell.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                        }
+                        if !lots.isEmpty {
+                            Image(systemName: "briefcase.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if !StockService.isOpen(stock) {
+                            Image(systemName: "moon.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    if !lots.isEmpty {
-                        Image(systemName: "briefcase.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    if !StockService.isOpen(stock) {
-                        Image(systemName: "moon.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Text(stock.name)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            if stock.intradayPrices.count >= 2 {
-                SparklineView(prices: stock.intradayPrices, isPositive: stock.isPositive)
-                    .frame(width: 50, height: 20)
-            }
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("\(stock.currencySymbol)\(String(format: "%.2f", stock.displayPrice))")
-                    .font(.system(.body, design: .monospaced))
-
-                HStack(spacing: 2) {
-                    Image(systemName: stock.isPositive ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                        .font(.caption2)
-                    Text(String(format: "%.2f (%.1f%%)", abs(stock.displayChange), abs(stock.changePercent)))
+                    Text(stock.name)
                         .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .foregroundStyle(stock.isPositive ? .green : .red)
+
+                Spacer()
+
+                if stock.intradayPrices.count >= 2 {
+                    SparklineView(prices: stock.intradayPrices, isPositive: stock.isPositive)
+                        .frame(width: 50, height: 20)
+                }
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(stock.currencySymbol)\(String(format: "%.2f", stock.displayPrice))")
+                        .font(.system(.body, design: .monospaced))
+
+                    HStack(spacing: 2) {
+                        Image(systemName: stock.isPositive ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                            .font(.caption2)
+                        Text(String(format: "%.2f (%.1f%%)", abs(stock.displayChange), abs(stock.changePercent)))
+                            .font(.caption)
+                    }
+                    .foregroundStyle(stock.isPositive ? .green : .red)
+                }
+
+                if hasDetail {
+                    Button(action: { expanded.toggle() }) {
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show details")
+                }
+            }
+
+            if expanded && hasDetail {
+                detailView
             }
         }
         .padding(.horizontal, 12)
@@ -604,6 +627,37 @@ struct StockRowView: View {
         .contentShape(Rectangle())
         .help(tooltipText)
     }
+
+    @ViewBuilder private var detailView: some View {
+        let cs = stock.currencySymbol
+        VStack(alignment: .leading, spacing: 2) {
+            if let high = stock.displayDayHigh, let low = stock.displayDayLow {
+                detailRow("Day", "\(cs)\(fmt(low)) – \(cs)\(fmt(high))")
+            }
+            if let h52 = stock.display52WeekHigh, let l52 = stock.display52WeekLow {
+                detailRow("52-week", "\(cs)\(fmt(l52)) – \(cs)\(fmt(h52))")
+            }
+            if let ah = stock.displayPostMarketPrice, let ahc = stock.displayPostMarketChange {
+                detailRow("After hours", "\(cs)\(fmt(ah)) (\(fmtSigned(ahc)))")
+            }
+            if let pm = stock.displayPreMarketPrice, let pmc = stock.displayPreMarketChange {
+                detailRow("Pre-market", "\(cs)\(fmt(pm)) (\(fmtSigned(pmc)))")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func detailRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).foregroundStyle(.tertiary)
+            Spacer()
+            Text(value).foregroundStyle(.secondary)
+        }
+        .font(.caption2)
+    }
+
+    private func fmt(_ v: Double) -> String { String(format: "%.2f", v) }
+    private func fmtSigned(_ v: Double) -> String { String(format: "%+.2f", v) }
 }
 
 
