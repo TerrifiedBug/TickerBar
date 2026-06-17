@@ -12,25 +12,25 @@ Test: `xcodebuild -project TickerBar.xcodeproj -scheme TickerBar -destination 'p
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Add CI (build+test on PR/push) + shared scheme | P1 | S | — | TODO |
-| 002 | Add MIT LICENSE file | P1 | S | — | TODO |
-| 004 | Resolve project.yml drift (delete stale spec) | P1 | S | — | TODO |
-| 003 | Fix stale README (market-hours toggle, build path) | P2 | S | — | TODO |
-| 008 | Inject UserDefaults into StockService | P1 | M | — | TODO |
-| 005 | Build Yahoo URLs with URLComponents (encoding) | P1 | M | — | TODO |
-| 006 | Surface missing-FX-rate instead of silent 1.0 | P1 | M | — | TODO |
-| 007 | Consolidate triplicated sub-unit currency logic | P2 | S | — | TODO |
-| 019 | Multi-lot holdings (RSU value-only + purchases) | P2 | L | 008, 006 | TODO |
-| 009 | Unit tests: money/alert/market-hours | P1 | M | 008, (006/007/019) | TODO |
-| 011 | Fix currentDisplayStock/index desync | P3 | S | 009 | TODO |
-| 010 | Improve market-hours accuracy (lunch/marketState) | P2 | M | 009 | TODO |
-| 012 | Reduce N+1 fetch (v7 primary, v8 sparkline-only) | P2 | M | 009, 005 | TODO |
-| 016 | Surface 52w/pre-post/day-range inline | P2 | M | 009 | TODO |
-| 015 | Export & import watchlist/holdings/alerts | P2 | M | 019 | TODO |
-| 017 | Percent-change & recurring alerts | P2 | M | 009 | TODO |
-| 014 | Split StockService god object | P3 | L | 009, 005, 006, 007, 008 | TODO |
+| 001 | Add CI (build+test on PR/push) + shared scheme | P1 | S | — | DONE |
+| 002 | Add MIT LICENSE file | P1 | S | — | DONE |
+| 004 | Resolve project.yml drift (delete stale spec) | P1 | S | — | DONE |
+| 003 | Fix stale README (market-hours toggle, build path) | P2 | S | — | DONE |
+| 008 | Inject UserDefaults into StockService | P1 | M | — | DONE |
+| 005 | Build Yahoo URLs with URLComponents (encoding) | P1 | M | — | DONE |
+| 006 | Surface missing-FX-rate instead of silent 1.0 | P1 | M | — | DONE |
+| 007 | Consolidate triplicated sub-unit currency logic | P2 | S | — | DONE |
+| 019 | Multi-lot holdings (RSU value-only + purchases) | P2 | L | 008, 006 | DONE |
+| 009 | Unit tests: money/alert/market-hours | P1 | M | 008, (006/007/019) | DONE |
+| 011 | Fix currentDisplayStock/index desync | P3 | S | 009 | DONE |
+| 010 | Improve market-hours accuracy (lunch/marketState) | P2 | M | 009 | DONE |
+| 012 | Reduce N+1 fetch (v7 primary, v8 sparkline-only) | P2 | M | 009, 005 | DEFERRED — STOP condition: needs live-Yahoo verification that v7 returns previousClose/day-range/timezone for all symbol types, and would drop per-row sparklines. Not safe to land without runtime verification (no network in this env). |
+| 016 | Surface 52w/pre-post/day-range inline | P2 | M | 009 | DONE |
+| 015 | Export & import watchlist/holdings/alerts | P2 | M | 019 | DONE |
+| 017 | Percent-change & recurring alerts | P2 | M | 009 | DONE |
+| 014 | Split StockService god object | P3 | L | 009, 005, 006, 007, 008 | PARTIAL — pure `PortfolioCalculator` extracted + unit-tested (the high-value, low-risk seam). The wider `YahooFinanceClient`/`SettingsStore` extraction is deferred: the verifier downgraded its value (pure pieces already factored + tested) and it's a high-risk Swift-6 actor-isolation refactor for maintainability only. |
 | 013 | Developer ID signing + notarization | P1 | M | — (needs Apple cert) | BLOCKED — requires paid Apple Developer ID cert + CI secrets; maintainer decision |
-| 018 | WidgetKit widget (spike) | P3 | L | 008 | TODO |
+| 018 | WidgetKit widget (spike) | P3 | L | 008 | DEFERRED — spike requires adding a new app-extension target + App Group entitlement, which needs Xcode (not safe via hand-edited pbxproj here). Groundwork is ready: fetch/parse are `nonisolated static`, `StockItem` is `Codable`. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
