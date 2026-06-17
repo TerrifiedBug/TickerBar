@@ -14,37 +14,37 @@ final class StockService {
 
     // MARK: - Settings (backed by UserDefaults)
     var watchlist: [String] {
-        didSet { UserDefaults.standard.set(watchlist, forKey: "watchlist") }
+        didSet { defaults.set(watchlist, forKey: "watchlist") }
     }
     var refreshInterval: TimeInterval {
-        didSet { UserDefaults.standard.set(refreshInterval, forKey: "refreshInterval"); restartRefreshTimer() }
+        didSet { defaults.set(refreshInterval, forKey: "refreshInterval"); restartRefreshTimer() }
     }
     var rotationEnabled: Bool {
-        didSet { UserDefaults.standard.set(rotationEnabled, forKey: "rotationEnabled"); restartRotationTimer() }
+        didSet { defaults.set(rotationEnabled, forKey: "rotationEnabled"); restartRotationTimer() }
     }
     var rotationSpeed: TimeInterval {
-        didSet { UserDefaults.standard.set(rotationSpeed, forKey: "rotationSpeed"); restartRotationTimer() }
+        didSet { defaults.set(rotationSpeed, forKey: "rotationSpeed"); restartRotationTimer() }
     }
     var pinnedSymbol: String {
-        didSet { UserDefaults.standard.set(pinnedSymbol, forKey: "pinnedSymbol") }
+        didSet { defaults.set(pinnedSymbol, forKey: "pinnedSymbol") }
     }
     var marketHoursOnly: Bool {
-        didSet { UserDefaults.standard.set(marketHoursOnly, forKey: "marketHoursOnly") }
+        didSet { defaults.set(marketHoursOnly, forKey: "marketHoursOnly") }
     }
     var showPercentChange: Bool {
-        didSet { UserDefaults.standard.set(showPercentChange, forKey: "showPercentChange") }
+        didSet { defaults.set(showPercentChange, forKey: "showPercentChange") }
     }
     var compactMenuBar: Bool {
-        didSet { UserDefaults.standard.set(compactMenuBar, forKey: "compactMenuBar") }
+        didSet { defaults.set(compactMenuBar, forKey: "compactMenuBar") }
     }
     var baseCurrency: String {
-        didSet { UserDefaults.standard.set(baseCurrency, forKey: "baseCurrency") }
+        didSet { defaults.set(baseCurrency, forKey: "baseCurrency") }
     }
     var menuBarFontSize: Double {
-        didSet { UserDefaults.standard.set(menuBarFontSize, forKey: "menuBarFontSize") }
+        didSet { defaults.set(menuBarFontSize, forKey: "menuBarFontSize") }
     }
     var solidPopoverBackground: Bool {
-        didSet { UserDefaults.standard.set(solidPopoverBackground, forKey: "solidPopoverBackground") }
+        didSet { defaults.set(solidPopoverBackground, forKey: "solidPopoverBackground") }
     }
 
     // MARK: - Exchange Rates (e.g. "GBP" -> 1.27 means 1 GBP = 1.27 base currency units)
@@ -61,7 +61,7 @@ final class StockService {
     var holdings: [String: Holding] = [:] {
         didSet {
             if let data = try? JSONEncoder().encode(holdings) {
-                UserDefaults.standard.set(data, forKey: "holdings")
+                defaults.set(data, forKey: "holdings")
             }
         }
     }
@@ -70,7 +70,7 @@ final class StockService {
     var priceAlerts: [PriceAlert] = [] {
         didSet {
             if let data = try? JSONEncoder().encode(priceAlerts) {
-                UserDefaults.standard.set(data, forKey: "priceAlerts")
+                defaults.set(data, forKey: "priceAlerts")
             }
         }
     }
@@ -96,8 +96,11 @@ final class StockService {
     nonisolated static let defaultWatchlist = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"]
     nonisolated private static let baseURL = "https://query2.finance.yahoo.com"
 
-    init() {
-        let defaults = UserDefaults.standard
+    // MARK: - Persistence
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         if let saved = defaults.stringArray(forKey: "watchlist"), !saved.isEmpty {
             self.watchlist = saved
         } else {

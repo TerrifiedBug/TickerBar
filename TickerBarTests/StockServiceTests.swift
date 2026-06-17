@@ -4,51 +4,56 @@ import XCTest
 @MainActor
 final class StockServiceTests: XCTestCase {
 
+    private var defaults: UserDefaults!
+    private var suiteName: String!
+
     override func setUp() {
         super.setUp()
-        // Clear persisted watchlist so each test starts fresh
-        UserDefaults.standard.removeObject(forKey: "watchlist")
-        UserDefaults.standard.removeObject(forKey: "refreshInterval")
-        UserDefaults.standard.removeObject(forKey: "rotationEnabled")
-        UserDefaults.standard.removeObject(forKey: "rotationSpeed")
-        UserDefaults.standard.removeObject(forKey: "pinnedSymbol")
-        UserDefaults.standard.removeObject(forKey: "marketHoursOnly")
-        UserDefaults.standard.removeObject(forKey: "menuBarFontSize")
-        UserDefaults.standard.removeObject(forKey: "solidPopoverBackground")
+        // Isolate persistence to a throwaway suite so tests never touch the
+        // real app defaults and run order-independently.
+        suiteName = "TickerBarTests-\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suiteName)
+    }
+
+    override func tearDown() {
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults = nil
+        suiteName = nil
+        super.tearDown()
     }
 
     func testDefaultWatchlist() {
-        let service = StockService()
+        let service = StockService(defaults: defaults)
         XCTAssertEqual(service.watchlist, ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"])
     }
 
     func testAddSymbol() {
-        let service = StockService()
+        let service = StockService(defaults: defaults)
         service.addSymbol("NVDA")
         XCTAssertTrue(service.watchlist.contains("NVDA"))
     }
 
     func testAddDuplicateSymbolIsIgnored() {
-        let service = StockService()
+        let service = StockService(defaults: defaults)
         let before = service.watchlist.count
         service.addSymbol("AAPL")
         XCTAssertEqual(service.watchlist.count, before)
     }
 
     func testAddSymbolUppercased() {
-        let service = StockService()
+        let service = StockService(defaults: defaults)
         service.addSymbol("nvda")
         XCTAssertTrue(service.watchlist.contains("NVDA"))
     }
 
     func testRemoveSymbol() {
-        let service = StockService()
+        let service = StockService(defaults: defaults)
         service.removeSymbol("TSLA")
         XCTAssertFalse(service.watchlist.contains("TSLA"))
     }
 
     func testCurrentDisplayIndexWraps() {
-        let service = StockService()
+        let service = StockService(defaults: defaults)
         // Populate stocks so advanceDisplay doesn't bail
         service.stocks = [
             StockItem(symbol: "A", name: "A", price: 1, previousClose: 1),
@@ -215,26 +220,26 @@ final class StockServiceTests: XCTestCase {
     // MARK: - New settings (defaults + persistence)
 
     func testMenuBarFontSizeDefaultsToTen() {
-        let service = StockService()
+        let service = StockService(defaults: defaults)
         XCTAssertEqual(service.menuBarFontSize, 10)
     }
 
     func testMenuBarFontSizePersists() {
-        let service = StockService()
+        let service = StockService(defaults: defaults)
         service.menuBarFontSize = 13
-        XCTAssertEqual(UserDefaults.standard.double(forKey: "menuBarFontSize"), 13)
-        XCTAssertEqual(StockService().menuBarFontSize, 13)
+        XCTAssertEqual(defaults.double(forKey: "menuBarFontSize"), 13)
+        XCTAssertEqual(StockService(defaults: defaults).menuBarFontSize, 13)
     }
 
     func testSolidPopoverBackgroundDefaultsToFalse() {
-        let service = StockService()
+        let service = StockService(defaults: defaults)
         XCTAssertFalse(service.solidPopoverBackground)
     }
 
     func testSolidPopoverBackgroundPersists() {
-        let service = StockService()
+        let service = StockService(defaults: defaults)
         service.solidPopoverBackground = true
-        XCTAssertTrue(UserDefaults.standard.bool(forKey: "solidPopoverBackground"))
-        XCTAssertTrue(StockService().solidPopoverBackground)
+        XCTAssertTrue(defaults.bool(forKey: "solidPopoverBackground"))
+        XCTAssertTrue(StockService(defaults: defaults).solidPopoverBackground)
     }
 }
