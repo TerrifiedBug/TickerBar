@@ -85,6 +85,16 @@ struct WatchlistView: View {
                 .padding(.bottom, 2)
             }
 
+            // Surface holdings excluded from the total because their exchange
+            // rate hasn't loaded yet, rather than silently mis-valuing them.
+            if service.hasUnconvertedHoldings {
+                Text("Some holdings excluded — exchange rates updating…")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 2)
+            }
+
             Divider()
 
             // Stock list

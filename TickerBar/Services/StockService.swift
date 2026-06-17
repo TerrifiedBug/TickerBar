@@ -706,24 +706,28 @@ final class StockService {
         holdings[symbol]
     }
 
-    /// Exchange rate from a stock's currency to baseCurrency. Returns 1.0 if same or unknown.
-    private func rateToBase(for stock: StockItem) -> Double {
+    /// Exchange rate from a stock's currency to baseCurrency. Returns nil when a
+    /// required (non-base) rate hasn't been fetched yet, so callers exclude the
+    /// holding instead of silently valuing it at parity — which previously
+    /// mis-stated e.g. a JPY holding ~150x against USD. Rates are re-fetched each
+    /// cycle while holdings exist.
+    private func rateToBase(for stock: StockItem) -> Double? {
         let cur = CurrencyUnit.majorUnitCode(stock.currency)
         if cur == baseCurrency { return 1.0 }
-        return exchangeRates[cur] ?? 1.0
+        return exchangeRates[cur]
     }
 
     var totalPortfolioValue: Double {
         stocks.reduce(0) { total, stock in
-            guard let h = holdings[stock.symbol] else { return total }
-            return total + stock.displayPrice * h.shares * rateToBase(for: stock)
+            guard let h = holdings[stock.symbol], let rate = rateToBase(for: stock) else { return total }
+            return total + stock.displayPrice * h.shares * rate
         }
     }
 
     var totalPortfolioCost: Double {
         stocks.reduce(0) { total, stock in
-            guard let h = holdings[stock.symbol] else { return total }
-            return total + h.costBasis * h.shares * rateToBase(for: stock)
+            guard let h = holdings[stock.symbol], let rate = rateToBase(for: stock) else { return total }
+            return total + h.costBasis * h.shares * rate
         }
     }
 
@@ -733,6 +737,12 @@ final class StockService {
 
     var totalPortfolioGainPercent: Double {
         totalPortfolioCost > 0 ? (totalPortfolioGain / totalPortfolioCost) * 100 : 0
+    }
+
+    /// True when a held symbol's currency has no known FX rate to the base
+    /// currency yet, so portfolio totals currently exclude that holding.
+    var hasUnconvertedHoldings: Bool {
+        stocks.contains { holdings[$0.symbol] != nil && rateToBase(for: $0) == nil }
     }
 
     var baseCurrencySymbol: String {
