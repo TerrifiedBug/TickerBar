@@ -545,7 +545,7 @@ struct StockRowView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
-                    if !StockService.isMarketOpen(timezoneName: stock.exchangeTimezoneName) {
+                    if !StockService.isOpen(stock) {
                         Image(systemName: "moon.fill")
                             .font(.caption2)
                             .foregroundStyle(.secondary)

@@ -485,4 +485,45 @@ final class StockServiceTests: XCTestCase {
         service.checkPriceAlerts()  // 90 < 100 -> no fire
         XCTAssertEqual(service.priceAlerts.count, 1)
     }
+
+    // MARK: - Market hours (lunch breaks + marketState preference)
+
+    func testTokyoLunchBreakClosed() {
+        let lunch = date(tz: "Asia/Tokyo", year: 2026, month: 2, day: 18, hour: 12)
+        XCTAssertFalse(StockService.isMarketOpen(timezoneName: "Asia/Tokyo", at: lunch))
+        let afterLunch = date(tz: "Asia/Tokyo", year: 2026, month: 2, day: 18, hour: 13)
+        XCTAssertTrue(StockService.isMarketOpen(timezoneName: "Asia/Tokyo", at: afterLunch))
+    }
+
+    func testHongKongLunchBreakClosed() {
+        let lunch = date(tz: "Asia/Hong_Kong", year: 2026, month: 2, day: 18, hour: 12, minute: 30)
+        XCTAssertFalse(StockService.isMarketOpen(timezoneName: "Asia/Hong_Kong", at: lunch))
+    }
+
+    func testIsOpenPrefersMarketStateOverClock() {
+        var s = stock("AAPL", price: 100)
+        s.marketState = "CLOSED"
+        XCTAssertFalse(StockService.isOpen(s))
+        s.marketState = "REGULAR"
+        XCTAssertTrue(StockService.isOpen(s))
+    }
+
+    func testIsOpenFallsBackToClockWhenNoMarketState() {
+        var s = stock("VOD.L", price: 100, currency: "GBP")
+        s.exchangeTimezoneName = "Europe/London"
+        s.marketState = nil
+        XCTAssertTrue(StockService.isOpen(s, at: date(tz: "Europe/London", year: 2026, month: 2, day: 18, hour: 10)))
+        XCTAssertFalse(StockService.isOpen(s, at: date(tz: "Europe/London", year: 2026, month: 2, day: 18, hour: 20)))
+    }
+
+    func testAdvanceDisplaySkipsClosedMarkets() {
+        let service = StockService(defaults: defaults)
+        var a = stock("A", price: 1); a.marketState = "CLOSED"
+        var b = stock("B", price: 2); b.marketState = "REGULAR"
+        var c = stock("C", price: 3); c.marketState = "CLOSED"
+        service.stocks = [a, b, c]
+        service.currentDisplayIndex = 0   // at A (closed)
+        service.advanceDisplay()          // should skip to B (the only open one)
+        XCTAssertEqual(service.currentDisplayIndex, 1)
+    }
 }

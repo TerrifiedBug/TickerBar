@@ -163,8 +163,8 @@ final class StockService {
         if rotationEnabled {
             let current = stocks[currentDisplayIndex % stocks.count]
             // If current stock's market is closed, prefer an open one (unless all are closed)
-            if !Self.isMarketOpen(timezoneName: current.exchangeTimezoneName) {
-                if let openStock = stocks.first(where: { Self.isMarketOpen(timezoneName: $0.exchangeTimezoneName) }) {
+            if !Self.isOpen(current) {
+                if let openStock = stocks.first(where: { Self.isOpen($0) }) {
                     return openStock
                 }
             }
@@ -182,7 +182,7 @@ final class StockService {
         guard !stocks.isEmpty, rotationEnabled else { return }
 
         let openStocks = stocks.enumerated().filter {
-            Self.isMarketOpen(timezoneName: $0.element.exchangeTimezoneName)
+            Self.isOpen($0.element)
         }
 
         if openStocks.isEmpty {
@@ -193,7 +193,7 @@ final class StockService {
             let startIndex = currentDisplayIndex
             for offset in 1...stocks.count {
                 let candidate = (startIndex + offset) % stocks.count
-                if Self.isMarketOpen(timezoneName: stocks[candidate].exchangeTimezoneName) {
+                if Self.isOpen(stocks[candidate]) {
                     currentDisplayIndex = candidate
                     return
                 }
@@ -235,13 +235,37 @@ final class StockService {
             (9 * 60 + 30, 16 * 60)       // US default: 9:30-16:00
         }
 
+        // Major Asian exchanges halt for a midday lunch break; treat it as closed.
+        let lunch: (open: Int, close: Int)? = switch tzID {
+        case let tz where tz.starts(with: "Asia/Tokyo"):
+            (11 * 60 + 30, 12 * 60 + 30)         // TSE lunch 11:30–12:30
+        case let tz where tz.starts(with: "Asia/Hong_Kong"), let tz where tz.starts(with: "Asia/Shanghai"):
+            (12 * 60, 13 * 60)                    // HKEX/SSE lunch 12:00–13:00
+        default:
+            nil
+        }
+        if let lunch, minuteOfDay >= lunch.open && minuteOfDay < lunch.close {
+            return false
+        }
+
         return minuteOfDay >= marketOpen && minuteOfDay < marketClose
+    }
+
+    /// Whether a stock's market is currently open. Prefers Yahoo's freshly
+    /// fetched `marketState` (REGULAR = open) over the local-clock heuristic,
+    /// which can't know holidays or half-days; falls back to the clock when no
+    /// marketState is available yet (e.g. before the first refresh).
+    nonisolated static func isOpen(_ stock: StockItem, at date: Date = Date()) -> Bool {
+        if let state = stock.marketState {
+            return state == "REGULAR"
+        }
+        return isMarketOpen(timezoneName: stock.exchangeTimezoneName, at: date)
     }
 
     /// Returns true if any stock in the watchlist has its market open
     var anyMarketOpen: Bool {
         if stocks.isEmpty { return Self.isMarketOpen() }
-        return stocks.contains { Self.isMarketOpen(timezoneName: $0.exchangeTimezoneName) }
+        return stocks.contains { Self.isOpen($0) }
     }
 
     // MARK: - Cookie + Crumb Authentication
