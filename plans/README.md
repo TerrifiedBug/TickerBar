@@ -29,7 +29,7 @@ Test: `xcodebuild -project TickerBar.xcodeproj -scheme TickerBar -destination 'p
 | 015 | Export & import watchlist/holdings/alerts | P2 | M | 019 | DONE |
 | 017 | Percent-change & recurring alerts | P2 | M | 009 | DONE |
 | 014 | Split StockService god object | P3 | L | 009, 005, 006, 007, 008 | PARTIAL — pure `PortfolioCalculator` extracted + unit-tested (the high-value, low-risk seam). The wider `YahooFinanceClient`/`SettingsStore` extraction is deferred: the verifier downgraded its value (pure pieces already factored + tested) and it's a high-risk Swift-6 actor-isolation refactor for maintainability only. |
-| 013 | Developer ID signing + notarization | P1 | M | — (needs Apple cert) | BLOCKED — requires paid Apple Developer ID cert + CI secrets; maintainer decision |
+| 013 | Developer ID signing + notarization | P1 | M | — (needs Apple cert) | DONE (code) — release.yml now signs with Developer ID + notarizes when these secrets are set: DEVELOPER_ID_CERT_P12_BASE64, DEVELOPER_ID_CERT_PASSWORD, DEVELOPER_ID_IDENTITY, NOTARY_APPLE_ID, NOTARY_PASSWORD, NOTARY_TEAM_ID; falls back to ad-hoc otherwise (no regression). ACTIVATION needs a paid Apple Developer ID cert + those secrets, and validation on a real tagged release. |
 | 018 | WidgetKit widget (spike) | P3 | L | 008 | DEFERRED — spike requires adding a new app-extension target + App Group entitlement, which needs Xcode (not safe via hand-edited pbxproj here). Groundwork is ready: fetch/parse are `nonisolated static`, `StockItem` is `Codable`. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
