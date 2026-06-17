@@ -30,10 +30,41 @@ jobs:
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="-"
 
-      - name: Codesign app
+      - name: Codesign and notarize
+        env:
+          DEVELOPER_ID_CERT_P12_BASE64: ${{ secrets.DEVELOPER_ID_CERT_P12_BASE64 }}
+          DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+          DEVELOPER_ID_IDENTITY: ${{ secrets.DEVELOPER_ID_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: |
-          codesign --force --deep --sign - \
-            build/Build/Products/Release/TickerBar.app
+          APP="build/Build/Products/Release/TickerBar.app"
+          if [ -n "$DEVELOPER_ID_CERT_P12_BASE64" ] && [ -n "$DEVELOPER_ID_IDENTITY" ]; then
+            echo "Developer ID secrets present — signing and notarizing."
+            KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+            KEYCHAIN_PASSWORD="$(uuidgen)"
+            security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+            security set-keychain-settings -lut 21600 "$KEYCHAIN"
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+            echo "$DEVELOPER_ID_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+            security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+            # Sign with hardened runtime (Sparkle nested code included via --deep).
+            codesign --force --deep --options runtime --timestamp \
+              --entitlements TickerBar/TickerBar.entitlements \
+              --sign "$DEVELOPER_ID_IDENTITY" "$APP"
+            codesign --verify --strict --verbose=2 "$APP"
+            # Notarize a temporary zip, then staple the app itself.
+            ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
+            xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+              --apple-id "$NOTARY_APPLE_ID" --password "$NOTARY_PASSWORD" --team-id "$NOTARY_TEAM_ID" --wait
+            xcrun stapler staple "$APP"
+          else
+            echo "No Developer ID secrets — falling back to ad-hoc signing (Gatekeeper warning on first launch)."
+            codesign --force --deep --sign - "$APP"
+          fi
 
       - name: Package app
         run: |
