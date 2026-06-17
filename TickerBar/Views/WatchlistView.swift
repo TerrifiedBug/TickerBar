@@ -14,6 +14,8 @@ struct WatchlistView: View {
     @State private var alertPriceText = ""
     @State private var alertIsAbove = true
     @State private var holdingsSymbol: String?
+    @State private var holdingsKind: StockService.LotKind = .purchase
+    @State private var editingLotID: UUID?
     @State private var holdingsSharesText = ""
     @State private var holdingsCostText = ""
 
@@ -77,9 +79,11 @@ struct WatchlistView: View {
                     Text("\(service.baseCurrencySymbol)\(String(format: "%.0f", service.totalPortfolioValue))")
                         .font(.caption)
                         .fontWeight(.medium)
-                    Text(String(format: "%@%+.0f (%.1f%%)", service.baseCurrencySymbol, service.totalPortfolioGain, service.totalPortfolioGainPercent))
-                        .font(.caption)
-                        .foregroundStyle(service.totalPortfolioGain >= 0 ? .green : .red)
+                    if service.hasCostBasis {
+                        Text(String(format: "%@%+.0f (%.1f%%)", service.baseCurrencySymbol, service.totalPortfolioGain, service.totalPortfolioGainPercent))
+                            .font(.caption)
+                            .foregroundStyle(service.totalPortfolioGain >= 0 ? .green : .red)
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 2)
@@ -104,7 +108,7 @@ struct WatchlistView: View {
                     .padding(12)
             } else {
                 ForEach(Array(service.stocks.enumerated()), id: \.element.id) { index, stock in
-                    StockRowView(stock: stock, hasAlert: !service.alertsForSymbol(stock.symbol).isEmpty, holding: service.holdingFor(stock.symbol))
+                    StockRowView(stock: stock, hasAlert: !service.alertsForSymbol(stock.symbol).isEmpty, lots: service.lots(for: stock.symbol))
                         .onTapGesture {
                             openYahooFinance(symbol: stock.symbol)
                         }
@@ -140,15 +144,34 @@ struct WatchlistView: View {
 
                             Divider()
 
-                            let holding = service.holdingFor(stock.symbol)
-                            Button(holding != nil ? "Edit Holdings (\(String(format: "%.2f", holding!.shares)) shares)..." : "Add Holdings...") {
-                                holdingsSharesText = holding != nil ? String(format: "%.2f", holding!.shares) : ""
-                                holdingsCostText = holding != nil ? String(format: "%.2f", holding!.costBasis) : String(format: "%.2f", stock.displayPrice)
+                            Button("Add RSUs...") {
+                                holdingsKind = .rsu
+                                editingLotID = nil
+                                holdingsSharesText = ""
+                                holdingsCostText = ""
                                 holdingsSymbol = stock.symbol
                             }
-                            if holding != nil {
-                                Button("Remove Holdings") {
-                                    service.setHolding(symbol: stock.symbol, shares: 0, costBasis: 0)
+                            Button("Add Purchase...") {
+                                holdingsKind = .purchase
+                                editingLotID = nil
+                                holdingsSharesText = ""
+                                holdingsCostText = ""
+                                holdingsSymbol = stock.symbol
+                            }
+                            let lots = service.lots(for: stock.symbol)
+                            if !lots.isEmpty {
+                                Divider()
+                                ForEach(lots) { lot in
+                                    Menu(lotMenuLabel(lot, currencySymbol: stock.currencySymbol)) {
+                                        Button("Edit...") {
+                                            holdingsKind = lot.kind
+                                            editingLotID = lot.id
+                                            holdingsSharesText = String(format: "%.2f", lot.shares)
+                                            holdingsCostText = lot.costBasis.map { String(format: "%.2f", $0) } ?? ""
+                                            holdingsSymbol = stock.symbol
+                                        }
+                                        Button("Remove") { service.removeLot(symbol: stock.symbol, id: lot.id) }
+                                    }
                                 }
                             }
 
@@ -198,11 +221,11 @@ struct WatchlistView: View {
                 .background(.background.opacity(0.5))
             }
 
-            // Holdings input
+            // Holdings input (RSU lot = shares only; Purchase lot = shares + cost)
             if let symbol = holdingsSymbol {
                 VStack(spacing: 8) {
                     HStack {
-                        Text("Holdings for \(symbol)")
+                        Text(holdingsFormTitle(symbol: symbol))
                             .font(.caption)
                             .fontWeight(.semibold)
                         Spacer()
@@ -221,27 +244,31 @@ struct WatchlistView: View {
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Avg Cost")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            TextField("0.00", text: $holdingsCostText)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 80)
+                        if holdingsKind == .purchase {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Avg Cost")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                TextField("0.00", text: $holdingsCostText)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 80)
+                            }
                         }
                         Spacer()
                         VStack(spacing: 2) {
                             Text(" ")
                                 .font(.caption2)
                             Button("Save") {
-                                if let shares = Double(holdingsSharesText),
-                                   let cost = Double(holdingsCostText) {
-                                    service.setHolding(symbol: symbol, shares: shares, costBasis: cost)
-                                }
-                                holdingsSymbol = nil
+                                saveHoldingLot(symbol: symbol)
                             }
-                            .disabled(Double(holdingsSharesText) == nil || Double(holdingsCostText) == nil)
+                            .disabled(!canSaveHoldingLot)
                         }
+                    }
+                    if holdingsKind == .rsu {
+                        Text("Vested shares — value only, no cost basis.")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -384,6 +411,40 @@ struct WatchlistView: View {
         )
     }
 
+    // MARK: - Holdings helpers
+
+    private func lotMenuLabel(_ lot: StockService.Holding, currencySymbol: String) -> String {
+        if lot.kind == .rsu {
+            return "RSU \(String(format: "%.2f", lot.shares)) sh"
+        }
+        let cost = lot.costBasis ?? 0
+        return "Buy \(String(format: "%.2f", lot.shares)) sh @ \(currencySymbol)\(String(format: "%.2f", cost))"
+    }
+
+    private func holdingsFormTitle(symbol: String) -> String {
+        let action = editingLotID != nil ? "Edit" : (holdingsKind == .rsu ? "Add RSUs" : "Add Purchase")
+        return "\(action) for \(symbol)"
+    }
+
+    private var canSaveHoldingLot: Bool {
+        guard Double(holdingsSharesText) != nil else { return false }
+        if holdingsKind == .purchase {
+            return Double(holdingsCostText.trimmingCharacters(in: .whitespaces)) != nil
+        }
+        return true
+    }
+
+    private func saveHoldingLot(symbol: String) {
+        guard let shares = Double(holdingsSharesText) else { return }
+        let cost = holdingsKind == .rsu ? nil : Double(holdingsCostText.trimmingCharacters(in: .whitespaces))
+        if let id = editingLotID {
+            service.updateLot(symbol: symbol, id: id, shares: shares, costBasis: cost)
+        } else {
+            service.addLot(symbol: symbol, kind: holdingsKind, shares: shares, costBasis: cost)
+        }
+        holdingsSymbol = nil
+    }
+
     private func addSymbol() {
         let symbol = newSymbol.uppercased().trimmingCharacters(in: .whitespaces)
         guard !symbol.isEmpty else { return }
@@ -434,7 +495,7 @@ struct WatchlistView: View {
 struct StockRowView: View {
     let stock: StockItem
     var hasAlert: Bool = false
-    var holding: StockService.Holding? = nil
+    var lots: [StockService.Holding] = []
 
     private var tooltipText: String {
         var lines: [String] = []
@@ -452,10 +513,14 @@ struct StockRowView: View {
         if let pmPrice = stock.displayPreMarketPrice, let pmChange = stock.displayPreMarketChange {
             lines.append("Pre-Market: \(cs)\(String(format: "%.2f", pmPrice)) (\(String(format: "%+.2f", pmChange)))")
         }
-        if let h = holding {
-            let value = stock.displayPrice * h.shares
-            let gain = (stock.displayPrice - h.costBasis) * h.shares
-            lines.append("\(String(format: "%.2f", h.shares)) shares @ \(cs)\(String(format: "%.2f", h.costBasis)) = \(cs)\(String(format: "%.2f", value)) (\(String(format: "%+.2f", gain)))")
+        for lot in lots {
+            let value = stock.displayPrice * lot.shares
+            if let cost = lot.costBasis {
+                let gain = (stock.displayPrice - cost) * lot.shares
+                lines.append("Buy \(String(format: "%.2f", lot.shares)) @ \(cs)\(String(format: "%.2f", cost)) = \(cs)\(String(format: "%.2f", value)) (\(String(format: "%+.2f", gain)))")
+            } else {
+                lines.append("RSU \(String(format: "%.2f", lot.shares)) sh = \(cs)\(String(format: "%.2f", value))")
+            }
         }
         if let state = stock.marketState {
             lines.append("Market: \(state)")
@@ -475,7 +540,7 @@ struct StockRowView: View {
                             .font(.caption2)
                             .foregroundStyle(.orange)
                     }
-                    if holding != nil {
+                    if !lots.isEmpty {
                         Image(systemName: "briefcase.fill")
                             .font(.caption2)
                             .foregroundStyle(.secondary)

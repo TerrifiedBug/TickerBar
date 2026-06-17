@@ -282,4 +282,116 @@ final class StockServiceTests: XCTestCase {
         let s = url!.absoluteString
         XCTAssertTrue(s.contains("q=a%20b%26c"), s)
     }
+
+    // MARK: - Holdings (multi-lot)
+
+    private func stock(_ symbol: String, price: Double, currency: String = "USD") -> StockItem {
+        StockItem(symbol: symbol, name: symbol, price: price, previousClose: price, currency: currency)
+    }
+
+    func testAddRSULotValueOnlyNoGain() {
+        let service = StockService(defaults: defaults)
+        service.stocks = [stock("AAPL", price: 100)]
+        service.addLot(symbol: "AAPL", kind: .rsu, shares: 10, costBasis: nil)
+        XCTAssertEqual(service.totalPortfolioValue, 1000, accuracy: 0.001)
+        XCTAssertEqual(service.totalPortfolioGain, 0, accuracy: 0.001)
+        XCTAssertFalse(service.hasCostBasis)
+    }
+
+    func testRSULotIgnoresAnyCost() {
+        let service = StockService(defaults: defaults)
+        service.addLot(symbol: "AAPL", kind: .rsu, shares: 10, costBasis: 50)
+        XCTAssertNil(service.lots(for: "AAPL").first?.costBasis)
+    }
+
+    func testPurchaseLotGain() {
+        let service = StockService(defaults: defaults)
+        service.stocks = [stock("AAPL", price: 130)]
+        service.addLot(symbol: "AAPL", kind: .purchase, shares: 10, costBasis: 100)
+        XCTAssertEqual(service.totalPortfolioValue, 1300, accuracy: 0.001)
+        XCTAssertEqual(service.totalPortfolioCost, 1000, accuracy: 0.001)
+        XCTAssertEqual(service.totalPortfolioGain, 300, accuracy: 0.001)
+        XCTAssertTrue(service.hasCostBasis)
+    }
+
+    func testMixedRSUAndPurchaseValueIncludesBothGainExcludesRSU() {
+        let service = StockService(defaults: defaults)
+        service.stocks = [stock("AAPL", price: 100)]
+        service.addLot(symbol: "AAPL", kind: .rsu, shares: 50, costBasis: nil)
+        service.addLot(symbol: "AAPL", kind: .purchase, shares: 10, costBasis: 80)
+        XCTAssertEqual(service.totalPortfolioValue, 6000, accuracy: 0.001)   // (50+10)*100
+        XCTAssertEqual(service.totalPortfolioCost, 800, accuracy: 0.001)     // 10*80
+        XCTAssertEqual(service.totalPortfolioGain, 200, accuracy: 0.001)     // 10*100 - 800
+        XCTAssertTrue(service.hasCostBasis)
+    }
+
+    func testMultiplePurchaseLotsCostAveraging() {
+        let service = StockService(defaults: defaults)
+        service.stocks = [stock("AAPL", price: 150)]
+        service.addLot(symbol: "AAPL", kind: .purchase, shares: 50, costBasis: 100)
+        service.addLot(symbol: "AAPL", kind: .purchase, shares: 100, costBasis: 130)
+        XCTAssertEqual(service.lots(for: "AAPL").count, 2)
+        XCTAssertEqual(service.totalPortfolioCost, 50 * 100 + 100 * 130, accuracy: 0.001)  // 18000
+        XCTAssertEqual(service.totalPortfolioValue, 150 * 150, accuracy: 0.001)            // 22500
+        XCTAssertEqual(service.totalPortfolioGain, 22500 - 18000, accuracy: 0.001)         // 4500
+    }
+
+    func testLotCRUDRemovesSymbolKeyWhenEmpty() {
+        let service = StockService(defaults: defaults)
+        service.addLot(symbol: "AAPL", kind: .purchase, shares: 10, costBasis: 100)
+        service.addLot(symbol: "AAPL", kind: .rsu, shares: 5, costBasis: nil)
+        XCTAssertEqual(service.lots(for: "AAPL").count, 2)
+        service.removeLot(symbol: "AAPL", id: service.lots(for: "AAPL")[0].id)
+        XCTAssertEqual(service.lots(for: "AAPL").count, 1)
+        service.removeLot(symbol: "AAPL", id: service.lots(for: "AAPL")[0].id)
+        XCTAssertTrue(service.lots(for: "AAPL").isEmpty)
+        XCTAssertNil(service.holdings["AAPL"])
+    }
+
+    func testUpdateLot() {
+        let service = StockService(defaults: defaults)
+        service.addLot(symbol: "AAPL", kind: .purchase, shares: 10, costBasis: 100)
+        let id = service.lots(for: "AAPL")[0].id
+        service.updateLot(symbol: "AAPL", id: id, shares: 20, costBasis: 110)
+        XCTAssertEqual(service.lots(for: "AAPL")[0].shares, 20)
+        XCTAssertEqual(service.lots(for: "AAPL")[0].costBasis, 110)
+    }
+
+    func testLegacyHoldingsMigratedToPurchaseLot() {
+        // Legacy single-record shape {shares, costBasis} must migrate to one
+        // purchase lot, not be dropped.
+        let legacy = ["AAPL": ["shares": 10.0, "costBasis": 130.0]]
+        let data = try! JSONSerialization.data(withJSONObject: legacy)
+        defaults.set(data, forKey: "holdings")
+        let service = StockService(defaults: defaults)
+        let lots = service.lots(for: "AAPL")
+        XCTAssertEqual(lots.count, 1)
+        XCTAssertEqual(lots.first?.kind, .purchase)
+        XCTAssertEqual(lots.first?.shares, 10)
+        XCTAssertEqual(lots.first?.costBasis, 130)
+    }
+
+    func testModernHoldingsRoundTrip() {
+        let service = StockService(defaults: defaults)
+        service.addLot(symbol: "AAPL", kind: .rsu, shares: 50, costBasis: nil)
+        service.addLot(symbol: "AAPL", kind: .purchase, shares: 10, costBasis: 80)
+        let reloaded = StockService(defaults: defaults)
+        let lots = reloaded.lots(for: "AAPL")
+        XCTAssertEqual(lots.count, 2)
+        XCTAssertEqual(lots.filter { $0.kind == .rsu }.count, 1)
+        XCTAssertEqual(lots.filter { $0.kind == .purchase }.first?.costBasis, 80)
+    }
+
+    func testHoldingMissingFXRateExcludedFromTotals() {
+        let service = StockService(defaults: defaults)   // baseCurrency USD
+        service.stocks = [stock("7203.T", price: 3000, currency: "JPY")]
+        service.addLot(symbol: "7203.T", kind: .purchase, shares: 10, costBasis: 2000)
+        // No exchangeRates["JPY"] -> excluded, NOT valued at parity (the 006 fix).
+        XCTAssertEqual(service.totalPortfolioValue, 0, accuracy: 0.001)
+        XCTAssertTrue(service.hasUnconvertedHoldings)
+        // Provide the rate -> now included.
+        service.exchangeRates["JPY"] = 0.0067
+        XCTAssertEqual(service.totalPortfolioValue, 3000 * 10 * 0.0067, accuracy: 0.01)
+        XCTAssertFalse(service.hasUnconvertedHoldings)
+    }
 }

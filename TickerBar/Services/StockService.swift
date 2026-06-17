@@ -53,12 +53,31 @@ final class StockService {
     static let supportedBaseCurrencies = ["USD", "GBP", "EUR", "JPY", "CAD", "AUD", "CHF"]
 
     // MARK: - Portfolio Holdings
-    struct Holding: Codable, Equatable {
-        var shares: Double
-        var costBasis: Double  // average price per share
+    //
+    // A symbol can hold multiple lots of either kind: any number of vested RSU
+    // lots (value only, no cost) and any number of purchase lots (with a cost
+    // basis, e.g. buy 50 @ X then 100 @ Y). Value sums all lots; gain/loss sums
+    // only cost-bearing lots.
+    enum LotKind: String, Codable, Equatable {
+        case rsu        // vested/awarded — value only, no cost basis
+        case purchase   // bought — has a cost basis
     }
 
-    var holdings: [String: Holding] = [:] {
+    struct Holding: Codable, Equatable, Identifiable {
+        var id: UUID
+        var kind: LotKind
+        var shares: Double
+        var costBasis: Double?   // nil for rsu; set for purchase
+
+        init(id: UUID = UUID(), kind: LotKind, shares: Double, costBasis: Double?) {
+            self.id = id
+            self.kind = kind
+            self.shares = shares
+            self.costBasis = costBasis
+        }
+    }
+
+    var holdings: [String: [Holding]] = [:] {
         didSet {
             if let data = try? JSONEncoder().encode(holdings) {
                 defaults.set(data, forKey: "holdings")
@@ -122,9 +141,18 @@ final class StockService {
             self.priceAlerts = savedAlerts
         }
 
-        if let holdingsData = defaults.data(forKey: "holdings"),
-           let savedHoldings = try? JSONDecoder().decode([String: Holding].self, from: holdingsData) {
-            self.holdings = savedHoldings
+        if let holdingsData = defaults.data(forKey: "holdings") {
+            if let modern = try? JSONDecoder().decode([String: [Holding]].self, from: holdingsData) {
+                self.holdings = modern
+            } else {
+                // Migrate the legacy single-record shape {shares, costBasis} into
+                // a one-element purchase lot per symbol. Keep the same key so
+                // existing users don't lose their holdings.
+                struct LegacyHolding: Codable { var shares: Double; var costBasis: Double }
+                if let legacy = try? JSONDecoder().decode([String: LegacyHolding].self, from: holdingsData) {
+                    self.holdings = legacy.mapValues { [Holding(kind: .purchase, shares: $0.shares, costBasis: $0.costBasis)] }
+                }
+            }
         }
     }
 
@@ -694,16 +722,29 @@ final class StockService {
 
     // MARK: - Portfolio Management
 
-    func setHolding(symbol: String, shares: Double, costBasis: Double) {
+    func lots(for symbol: String) -> [Holding] { holdings[symbol] ?? [] }
+
+    func addLot(symbol: String, kind: LotKind, shares: Double, costBasis: Double?) {
+        guard shares > 0 else { return }
+        let cost = kind == .rsu ? nil : costBasis
+        holdings[symbol, default: []].append(Holding(kind: kind, shares: shares, costBasis: cost))
+    }
+
+    func updateLot(symbol: String, id: UUID, shares: Double, costBasis: Double?) {
+        guard var list = holdings[symbol], let idx = list.firstIndex(where: { $0.id == id }) else { return }
         if shares > 0 {
-            holdings[symbol] = Holding(shares: shares, costBasis: costBasis)
+            list[idx].shares = shares
+            list[idx].costBasis = list[idx].kind == .rsu ? nil : costBasis
+            holdings[symbol] = list
         } else {
-            holdings.removeValue(forKey: symbol)
+            removeLot(symbol: symbol, id: id)
         }
     }
 
-    func holdingFor(_ symbol: String) -> Holding? {
-        holdings[symbol]
+    func removeLot(symbol: String, id: UUID) {
+        guard var list = holdings[symbol] else { return }
+        list.removeAll { $0.id == id }
+        if list.isEmpty { holdings.removeValue(forKey: symbol) } else { holdings[symbol] = list }
     }
 
     /// Exchange rate from a stock's currency to baseCurrency. Returns nil when a
@@ -719,30 +760,49 @@ final class StockService {
 
     var totalPortfolioValue: Double {
         stocks.reduce(0) { total, stock in
-            guard let h = holdings[stock.symbol], let rate = rateToBase(for: stock) else { return total }
-            return total + stock.displayPrice * h.shares * rate
+            guard let rate = rateToBase(for: stock) else { return total }
+            return total + lots(for: stock.symbol).reduce(0) { $0 + stock.displayPrice * $1.shares * rate }
         }
     }
 
     var totalPortfolioCost: Double {
         stocks.reduce(0) { total, stock in
-            guard let h = holdings[stock.symbol], let rate = rateToBase(for: stock) else { return total }
-            return total + h.costBasis * h.shares * rate
+            guard let rate = rateToBase(for: stock) else { return total }
+            return total + lots(for: stock.symbol).reduce(0) { acc, lot in
+                guard let cost = lot.costBasis else { return acc }
+                return acc + cost * lot.shares * rate
+            }
+        }
+    }
+
+    /// Current value of only the cost-bearing lots — the basis for gain so a
+    /// mixed RSU + purchase portfolio compares like with like.
+    private var costBasisLotsValue: Double {
+        stocks.reduce(0) { total, stock in
+            guard let rate = rateToBase(for: stock) else { return total }
+            return total + lots(for: stock.symbol).reduce(0) { acc, lot in
+                lot.costBasis == nil ? acc : acc + stock.displayPrice * lot.shares * rate
+            }
         }
     }
 
     var totalPortfolioGain: Double {
-        totalPortfolioValue - totalPortfolioCost
+        costBasisLotsValue - totalPortfolioCost
     }
 
     var totalPortfolioGainPercent: Double {
         totalPortfolioCost > 0 ? (totalPortfolioGain / totalPortfolioCost) * 100 : 0
     }
 
+    /// True when at least one lot has a cost basis, so gain/loss is meaningful.
+    var hasCostBasis: Bool {
+        holdings.values.contains { lots in lots.contains { $0.costBasis != nil } }
+    }
+
     /// True when a held symbol's currency has no known FX rate to the base
-    /// currency yet, so portfolio totals currently exclude that holding.
+    /// currency yet, so portfolio totals currently exclude that symbol's lots.
     var hasUnconvertedHoldings: Bool {
-        stocks.contains { holdings[$0.symbol] != nil && rateToBase(for: $0) == nil }
+        stocks.contains { !lots(for: $0.symbol).isEmpty && rateToBase(for: $0) == nil }
     }
 
     var baseCurrencySymbol: String {
