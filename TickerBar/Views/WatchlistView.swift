@@ -13,6 +13,8 @@ struct WatchlistView: View {
     @State private var alertSymbol: String?
     @State private var alertPriceText = ""
     @State private var alertIsAbove = true
+    @State private var alertKind: AlertKind = .absolutePrice
+    @State private var alertRepeating = false
     @State private var holdingsSymbol: String?
     @State private var holdingsKind: StockService.LotKind = .purchase
     @State private var editingLotID: UUID?
@@ -129,6 +131,8 @@ struct WatchlistView: View {
                             Button("Set Price Alert...") {
                                 alertPriceText = String(format: "%.2f", stock.displayPrice)
                                 alertIsAbove = true
+                                alertKind = .absolutePrice
+                                alertRepeating = false
                                 alertSymbol = stock.symbol
                             }
 
@@ -136,7 +140,7 @@ struct WatchlistView: View {
                             if !alerts.isEmpty {
                                 Divider()
                                 ForEach(alerts) { alert in
-                                    Button("Remove: \(alert.directionLabel) \(stock.currencySymbol)\(String(format: "%.2f", alert.targetPrice))") {
+                                    Button("Remove: \(alert.directionLabel) \(alertTargetLabel(alert, currencySymbol: stock.currencySymbol))\(alert.repeating ? " (repeat)" : "")") {
                                         service.removeAlert(alert)
                                     }
                                 }
@@ -197,19 +201,31 @@ struct WatchlistView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Picker("", selection: $alertKind) {
+                            Text("Price").tag(AlertKind.absolutePrice)
+                            Text("% Chg").tag(AlertKind.percentChange)
+                        }
+                        .labelsHidden()
+                        .frame(width: 84)
                         Picker("", selection: $alertIsAbove) {
                             Text("Above").tag(true)
                             Text("Below").tag(false)
                         }
                         .labelsHidden()
                         .frame(width: 70)
-                        TextField("Price", text: $alertPriceText)
+                        TextField(alertKind == .percentChange ? "%" : "Price", text: $alertPriceText)
                             .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
+                            .frame(width: 60)
+                    }
+                    HStack(spacing: 8) {
+                        Toggle("Repeat", isOn: $alertRepeating)
+                            .toggleStyle(.checkbox)
+                            .font(.caption)
+                        Spacer()
                         Button("Set") {
-                            if let price = Double(alertPriceText) {
-                                service.addAlert(symbol: symbol, targetPrice: price, isAbove: alertIsAbove)
+                            if let value = Double(alertPriceText) {
+                                service.addAlert(symbol: symbol, targetPrice: value, isAbove: alertIsAbove, kind: alertKind, repeating: alertRepeating)
                                 alertSymbol = nil
                             }
                         }
@@ -411,7 +427,13 @@ struct WatchlistView: View {
         )
     }
 
-    // MARK: - Holdings helpers
+    // MARK: - Alert + holdings helpers
+
+    private func alertTargetLabel(_ alert: PriceAlert, currencySymbol: String) -> String {
+        alert.kind == .percentChange
+            ? String(format: "%.1f%%", alert.targetPrice)
+            : "\(currencySymbol)\(String(format: "%.2f", alert.targetPrice))"
+    }
 
     private func lotMenuLabel(_ lot: StockService.Holding, currencySymbol: String) -> String {
         if lot.kind == .rsu {

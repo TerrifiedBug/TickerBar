@@ -444,24 +444,24 @@ final class StockServiceTests: XCTestCase {
 
     func testPriceAlertNotTriggeredUntilArmed() {
         var alert = PriceAlert(symbol: "AAPL", targetPrice: 100, isAbove: true)
-        XCTAssertFalse(alert.isTriggered(currentPrice: 150))
+        XCTAssertFalse(alert.isTriggered(currentPrice: 150, changePercent: 0))
         alert.armed = true
-        XCTAssertTrue(alert.isTriggered(currentPrice: 150))
+        XCTAssertTrue(alert.isTriggered(currentPrice: 150, changePercent: 0))
     }
 
     func testPriceAlertAboveBoundaryInclusive() {
         var alert = PriceAlert(symbol: "AAPL", targetPrice: 100, isAbove: true)
         alert.armed = true
-        XCTAssertTrue(alert.isTriggered(currentPrice: 100))
-        XCTAssertFalse(alert.isTriggered(currentPrice: 99.99))
+        XCTAssertTrue(alert.isTriggered(currentPrice: 100, changePercent: 0))
+        XCTAssertFalse(alert.isTriggered(currentPrice: 99.99, changePercent: 0))
     }
 
     func testPriceAlertBelowBoundaryInclusive() {
         var alert = PriceAlert(symbol: "AAPL", targetPrice: 100, isAbove: false)
         alert.armed = true
-        XCTAssertTrue(alert.isTriggered(currentPrice: 100))
-        XCTAssertTrue(alert.isTriggered(currentPrice: 50))
-        XCTAssertFalse(alert.isTriggered(currentPrice: 100.01))
+        XCTAssertTrue(alert.isTriggered(currentPrice: 100, changePercent: 0))
+        XCTAssertTrue(alert.isTriggered(currentPrice: 50, changePercent: 0))
+        XCTAssertFalse(alert.isTriggered(currentPrice: 100.01, changePercent: 0))
     }
 
     func testCheckPriceAlertsArmsFirstCycleThenFiresAndRemoves() {
@@ -578,5 +578,35 @@ final class StockServiceTests: XCTestCase {
     func testImportRejectsMalformedData() {
         let service = StockService(defaults: defaults)
         XCTAssertFalse(service.importBackupData(Data("not json".utf8)))
+    }
+
+    // MARK: - Percent-change & recurring alerts
+
+    func testPercentChangeAlertTriggersOnChangePercent() {
+        var alert = PriceAlert(symbol: "AAPL", targetPrice: 5, isAbove: true, kind: .percentChange)
+        alert.armed = true
+        XCTAssertTrue(alert.isTriggered(currentPrice: 999, changePercent: 6))   // price irrelevant
+        XCTAssertFalse(alert.isTriggered(currentPrice: 999, changePercent: 4))
+    }
+
+    func testRepeatingAlertReArmsInsteadOfRemoval() {
+        let service = StockService(defaults: defaults)
+        service.stocks = [stock("AAPL", price: 150)]
+        service.priceAlerts = [PriceAlert(symbol: "AAPL", targetPrice: 100, isAbove: true, repeating: true)]
+        service.checkPriceAlerts()  // arm
+        XCTAssertTrue(service.priceAlerts[0].armed)
+        service.checkPriceAlerts()  // fires, but repeating -> kept and disarmed
+        XCTAssertEqual(service.priceAlerts.count, 1)
+        XCTAssertFalse(service.priceAlerts[0].armed)
+    }
+
+    func testLegacyAlertDecodesWithDefaults() {
+        let legacy = """
+        {"id":"\(UUID().uuidString)","symbol":"AAPL","targetPrice":100,"isAbove":true,"armed":false}
+        """.data(using: .utf8)!
+        let alert = try! JSONDecoder().decode(PriceAlert.self, from: legacy)
+        XCTAssertEqual(alert.kind, .absolutePrice)
+        XCTAssertFalse(alert.repeating)
+        XCTAssertEqual(alert.targetPrice, 100)
     }
 }

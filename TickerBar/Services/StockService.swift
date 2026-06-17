@@ -686,8 +686,8 @@ final class StockService {
 
     var notificationWarning: String?
 
-    func addAlert(symbol: String, targetPrice: Double, isAbove: Bool) {
-        let alert = PriceAlert(symbol: symbol, targetPrice: targetPrice, isAbove: isAbove)
+    func addAlert(symbol: String, targetPrice: Double, isAbove: Bool, kind: AlertKind = .absolutePrice, repeating: Bool = false) {
+        let alert = PriceAlert(symbol: symbol, targetPrice: targetPrice, isAbove: isAbove, kind: kind, repeating: repeating)
         priceAlerts.append(alert)
         ensureNotificationPermission()
     }
@@ -733,9 +733,14 @@ final class StockService {
                 continue
             }
 
-            if priceAlerts[i].isTriggered(currentPrice: stock.displayPrice) {
-                triggeredAlertIDs.insert(priceAlerts[i].id)
-                sendAlertNotification(alert: priceAlerts[i], currentPrice: stock.displayPrice, currency: stock.currencySymbol)
+            if priceAlerts[i].isTriggered(currentPrice: stock.displayPrice, changePercent: stock.changePercent) {
+                sendAlertNotification(alert: priceAlerts[i], stock: stock)
+                if priceAlerts[i].repeating {
+                    // Disarm so it re-arms next cycle rather than firing every cycle.
+                    priceAlerts[i].armed = false
+                } else {
+                    triggeredAlertIDs.insert(priceAlerts[i].id)
+                }
             }
         }
 
@@ -744,13 +749,19 @@ final class StockService {
         }
     }
 
-    private func sendAlertNotification(alert: PriceAlert, currentPrice: Double, currency: String) {
+    private func sendAlertNotification(alert: PriceAlert, stock: StockItem) {
         let content = UNMutableNotificationContent()
         content.title = "\(alert.symbol) Price Alert"
-        content.body = "\(alert.symbol) is now \(currency)\(String(format: "%.2f", currentPrice)), \(alert.directionLabel) your target of \(currency)\(String(format: "%.2f", alert.targetPrice))"
+        let currency = stock.currencySymbol
+        switch alert.kind {
+        case .percentChange:
+            content.body = "\(alert.symbol) is \(String(format: "%+.1f%%", stock.changePercent)) today, \(alert.directionLabel) your \(String(format: "%.1f%%", alert.targetPrice)) target"
+        case .absolutePrice:
+            content.body = "\(alert.symbol) is now \(currency)\(String(format: "%.2f", stock.displayPrice)), \(alert.directionLabel) your target of \(currency)\(String(format: "%.2f", alert.targetPrice))"
+        }
         content.sound = .default
 
-        let request = UNNotificationRequest(identifier: alert.id.uuidString, content: content, trigger: nil)
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
 
