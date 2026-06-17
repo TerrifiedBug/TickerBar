@@ -394,4 +394,95 @@ final class StockServiceTests: XCTestCase {
         XCTAssertEqual(service.totalPortfolioValue, 3000 * 10 * 0.0067, accuracy: 0.01)
         XCTAssertFalse(service.hasUnconvertedHoldings)
     }
+
+    // MARK: - Market hours (non-US exchanges)
+
+    private func date(tz: String, year: Int, month: Int, day: Int, hour: Int, minute: Int = 0) -> Date {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: tz)!
+        var c = DateComponents()
+        c.year = year; c.month = month; c.day = day; c.hour = hour; c.minute = minute
+        return cal.date(from: c)!
+    }
+
+    func testLondonMarketOpenDuringHours() {
+        // 2026-02-18 is a Wednesday. LSE 08:00–16:30.
+        let open = date(tz: "Europe/London", year: 2026, month: 2, day: 18, hour: 10)
+        XCTAssertTrue(StockService.isMarketOpen(timezoneName: "Europe/London", at: open))
+    }
+
+    func testLondonMarketClosedAtCloseBoundary() {
+        let atClose = date(tz: "Europe/London", year: 2026, month: 2, day: 18, hour: 16, minute: 30)
+        XCTAssertFalse(StockService.isMarketOpen(timezoneName: "Europe/London", at: atClose))
+        let justBefore = date(tz: "Europe/London", year: 2026, month: 2, day: 18, hour: 16, minute: 29)
+        XCTAssertTrue(StockService.isMarketOpen(timezoneName: "Europe/London", at: justBefore))
+    }
+
+    func testLondonMarketClosedOnWeekend() {
+        // 2026-02-21 is a Saturday.
+        let sat = date(tz: "Europe/London", year: 2026, month: 2, day: 21, hour: 10)
+        XCTAssertFalse(StockService.isMarketOpen(timezoneName: "Europe/London", at: sat))
+    }
+
+    func testTokyoMarketHours() {
+        // TSE 09:00–15:00.
+        XCTAssertTrue(StockService.isMarketOpen(timezoneName: "Asia/Tokyo",
+            at: date(tz: "Asia/Tokyo", year: 2026, month: 2, day: 18, hour: 10)))
+        XCTAssertFalse(StockService.isMarketOpen(timezoneName: "Asia/Tokyo",
+            at: date(tz: "Asia/Tokyo", year: 2026, month: 2, day: 18, hour: 15)))
+    }
+
+    func testHongKongMarketHours() {
+        // HKEX 09:30–16:00.
+        XCTAssertTrue(StockService.isMarketOpen(timezoneName: "Asia/Hong_Kong",
+            at: date(tz: "Asia/Hong_Kong", year: 2026, month: 2, day: 18, hour: 10)))
+        XCTAssertFalse(StockService.isMarketOpen(timezoneName: "Asia/Hong_Kong",
+            at: date(tz: "Asia/Hong_Kong", year: 2026, month: 2, day: 18, hour: 9, minute: 0)))
+    }
+
+    // MARK: - Price alerts
+
+    func testPriceAlertNotTriggeredUntilArmed() {
+        var alert = PriceAlert(symbol: "AAPL", targetPrice: 100, isAbove: true)
+        XCTAssertFalse(alert.isTriggered(currentPrice: 150))
+        alert.armed = true
+        XCTAssertTrue(alert.isTriggered(currentPrice: 150))
+    }
+
+    func testPriceAlertAboveBoundaryInclusive() {
+        var alert = PriceAlert(symbol: "AAPL", targetPrice: 100, isAbove: true)
+        alert.armed = true
+        XCTAssertTrue(alert.isTriggered(currentPrice: 100))
+        XCTAssertFalse(alert.isTriggered(currentPrice: 99.99))
+    }
+
+    func testPriceAlertBelowBoundaryInclusive() {
+        var alert = PriceAlert(symbol: "AAPL", targetPrice: 100, isAbove: false)
+        alert.armed = true
+        XCTAssertTrue(alert.isTriggered(currentPrice: 100))
+        XCTAssertTrue(alert.isTriggered(currentPrice: 50))
+        XCTAssertFalse(alert.isTriggered(currentPrice: 100.01))
+    }
+
+    func testCheckPriceAlertsArmsFirstCycleThenFiresAndRemoves() {
+        let service = StockService(defaults: defaults)
+        service.stocks = [stock("AAPL", price: 150)]
+        service.priceAlerts = [PriceAlert(symbol: "AAPL", targetPrice: 100, isAbove: true)]
+        // First cycle arms only (skips the creation cycle).
+        service.checkPriceAlerts()
+        XCTAssertEqual(service.priceAlerts.count, 1)
+        XCTAssertTrue(service.priceAlerts[0].armed)
+        // Second cycle: 150 >= 100 -> fires and removes.
+        service.checkPriceAlerts()
+        XCTAssertTrue(service.priceAlerts.isEmpty)
+    }
+
+    func testCheckPriceAlertsDoesNotFireWhenNotCrossed() {
+        let service = StockService(defaults: defaults)
+        service.stocks = [stock("AAPL", price: 90)]
+        service.priceAlerts = [PriceAlert(symbol: "AAPL", targetPrice: 100, isAbove: true)]
+        service.checkPriceAlerts()  // arm
+        service.checkPriceAlerts()  // 90 < 100 -> no fire
+        XCTAssertEqual(service.priceAlerts.count, 1)
+    }
 }

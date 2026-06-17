@@ -687,7 +687,7 @@ final class StockService {
         priceAlerts.filter { $0.symbol == symbol }
     }
 
-    private func checkPriceAlerts() {
+    func checkPriceAlerts() {
         var triggeredAlertIDs: Set<UUID> = []
 
         for i in priceAlerts.indices {
