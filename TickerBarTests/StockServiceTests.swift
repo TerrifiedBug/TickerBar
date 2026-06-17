@@ -242,4 +242,44 @@ final class StockServiceTests: XCTestCase {
         XCTAssertTrue(defaults.bool(forKey: "solidPopoverBackground"))
         XCTAssertTrue(StockService(defaults: defaults).solidPopoverBackground)
     }
+
+    // MARK: - URL building (encoding)
+
+    func testChartURLEscapesPlusInCrumb() {
+        // A '+' in a query value must become %2B; servers decode a literal '+'
+        // as a space, which corrupts the crumb and breaks auth.
+        let url = StockService.chartURL(symbol: "AAPL", crumb: "ab+cd")
+        XCTAssertNotNil(url)
+        let s = url!.absoluteString
+        XCTAssertTrue(s.contains("crumb=ab%2Bcd"), s)
+        XCTAssertFalse(s.contains("crumb=ab+cd"), s)
+    }
+
+    func testChartURLResolvesCaretIndexSymbol() {
+        // "^GSPC" previously made URL(string:) return nil and silently failed.
+        let url = StockService.chartURL(symbol: "^GSPC", crumb: "x")
+        XCTAssertNotNil(url)
+        XCTAssertTrue(url!.absoluteString.contains("%5EGSPC"), url!.absoluteString)
+    }
+
+    func testQuoteURLEscapesPlusAndKeepsCommaSeparator() {
+        let url = StockService.quoteURL(symbols: ["AAPL", "MSFT"], crumb: "a+b")
+        XCTAssertNotNil(url)
+        let s = url!.absoluteString
+        XCTAssertTrue(s.contains("symbols=AAPL,MSFT"), s)
+        XCTAssertTrue(s.contains("crumb=a%2Bb"), s)
+    }
+
+    func testQuoteURLEscapesEqualsInFXSymbols() {
+        let url = StockService.quoteURL(symbols: ["GBPUSD=X"], crumb: "x")
+        XCTAssertNotNil(url)
+        XCTAssertTrue(url!.absoluteString.contains("symbols=GBPUSD%3DX"), url!.absoluteString)
+    }
+
+    func testSearchURLEscapesSpaceAndAmpersand() {
+        let url = StockService.searchURL(query: "a b&c")
+        XCTAssertNotNil(url)
+        let s = url!.absoluteString
+        XCTAssertTrue(s.contains("q=a%20b%26c"), s)
+    }
 }

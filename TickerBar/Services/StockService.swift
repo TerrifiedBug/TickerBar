@@ -254,6 +254,67 @@ final class StockService {
         crumb = nil
     }
 
+    // MARK: - URL Building
+    //
+    // Yahoo crumbs commonly contain '+', '/', and '='. A raw interpolated URL,
+    // or `.urlQueryAllowed` over a whole URL string, leaves '+' intact — and a
+    // server decodes a query '+' as a space, corrupting the crumb. We build
+    // every request with explicit per-component encoding so '+', '&', '#', '='
+    // in a value are escaped, and symbols like "^GSPC" resolve in the path.
+
+    /// Percent-encode a value for safe use as a URL *query value*, escaping the
+    /// sub-delimiters that change a query's meaning ('+' decodes to space; '&',
+    /// '=', '#', '?' delimit). Commas survive so `symbols=A,B` stays intact.
+    nonisolated static func encodedQueryValue(_ value: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "+&=#?")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    private nonisolated static func yahooURL(path: String, query: [(name: String, value: String)]) -> URL? {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "query2.finance.yahoo.com"
+        components.path = path
+        components.percentEncodedQuery = query
+            .map { "\($0.name)=\(encodedQueryValue($0.value))" }
+            .joined(separator: "&")
+        return components.url
+    }
+
+    /// v8 chart URL — the symbol is a path segment, so encode it (escapes '^'
+    /// in index symbols like "^GSPC", which previously made `URL(string:)` nil).
+    nonisolated static func chartURL(symbol: String, crumb: String) -> URL? {
+        var pathAllowed = CharacterSet.urlPathAllowed
+        pathAllowed.remove(charactersIn: "/")
+        let encodedSymbol = symbol.addingPercentEncoding(withAllowedCharacters: pathAllowed) ?? symbol
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "query2.finance.yahoo.com"
+        components.percentEncodedPath = "/v8/finance/chart/\(encodedSymbol)"
+        components.percentEncodedQuery = "interval=5m&range=1d&crumb=\(encodedQueryValue(crumb))"
+        return components.url
+    }
+
+    /// v7 batch quote URL (used for quote enrichment and FX rates).
+    nonisolated static func quoteURL(symbols: [String], crumb: String) -> URL? {
+        yahooURL(path: "/v7/finance/quote", query: [
+            ("symbols", symbols.joined(separator: ",")),
+            ("formatted", "false"),
+            ("crumb", crumb),
+        ])
+    }
+
+    /// v1 symbol search URL.
+    nonisolated static func searchURL(query: String) -> URL? {
+        yahooURL(path: "/v1/finance/search", query: [
+            ("q", query),
+            ("quotesCount", "6"),
+            ("newsCount", "0"),
+            ("listsCount", "0"),
+        ])
+    }
+
     // MARK: - Networking
 
     private enum FetchOutcome: Sendable {
@@ -397,8 +458,7 @@ final class StockService {
 
     private nonisolated static func fetchQuote(for symbol: String, crumb: String?) async -> FetchOutcome {
         guard let crumb else { return .failure }
-        let urlString = "\(baseURL)/v8/finance/chart/\(symbol)?interval=5m&range=1d&crumb=\(crumb)"
-        guard let url = URL(string: urlString) else { return .failure }
+        guard let url = chartURL(symbol: symbol, crumb: crumb) else { return .failure }
 
         do {
             let (data, response) = try await session.data(from: url)
@@ -463,9 +523,7 @@ final class StockService {
 
     /// Batch fetch v7 quote data for all symbols (single HTTP call).
     private nonisolated static func fetchV7Quotes(symbols: [String], crumb: String) async -> [String: V7QuoteData] {
-        let joined = symbols.joined(separator: ",")
-        let urlString = "\(baseURL)/v7/finance/quote?symbols=\(joined)&formatted=false&crumb=\(crumb)"
-        guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString) else { return [:] }
+        guard let url = quoteURL(symbols: symbols, crumb: crumb) else { return [:] }
 
         do {
             let (data, response) = try await session.data(from: url)
@@ -499,10 +557,7 @@ final class StockService {
 
     /// Fetch exchange rates via v7/quote (e.g. symbols = ["GBPUSD=X", "EURUSD=X"])
     private nonisolated static func fetchExchangeRates(symbols: [String], crumb: String) async -> [String: Double] {
-        let joined = symbols.joined(separator: ",")
-        let urlString = "\(baseURL)/v7/finance/quote?symbols=\(joined)&formatted=false&crumb=\(crumb)"
-        guard let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: encoded) else { return [:] }
+        guard let url = quoteURL(symbols: symbols, crumb: crumb) else { return [:] }
 
         do {
             let (data, response) = try await session.data(from: url)
@@ -717,8 +772,7 @@ final class StockService {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
 
-        let urlString = "\(Self.baseURL)/v1/finance/search?q=\(trimmed)&quotesCount=6&newsCount=0&listsCount=0"
-        guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString) else { return [] }
+        guard let url = Self.searchURL(query: trimmed) else { return [] }
 
         do {
             let (data, response) = try await Self.session.data(from: url)
