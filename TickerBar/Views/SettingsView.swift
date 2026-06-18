@@ -1,5 +1,7 @@
 import SwiftUI
 import ServiceManagement
+import AppKit
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Bindable var service: StockService
@@ -140,7 +142,39 @@ struct SettingsView: View {
                 }
                 .disabled(!updateChecker.canCheckForUpdates)
             }
+
+            Divider()
+
+            // Backup: export/import watchlist, holdings, alerts, and currency.
+            HStack {
+                Text("Backup")
+                Spacer()
+                Button("Export…") { exportPortfolio() }
+                Button("Import…") { importPortfolio() }
+            }
         }
         .padding(12)
+    }
+
+    private func exportPortfolio() {
+        guard let data = try? service.exportBackupData() else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "TickerBar-backup.json"
+        panel.allowedContentTypes = [.json]
+        if panel.runModal() == .OK, let url = panel.url {
+            try? data.write(to: url)
+        }
+    }
+
+    private func importPortfolio() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.json]
+        if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url) {
+            if service.importBackupData(data) {
+                Task { await service.fetchAllQuotes() }
+            }
+        }
     }
 }

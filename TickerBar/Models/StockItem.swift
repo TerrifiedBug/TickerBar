@@ -1,5 +1,91 @@
 import Foundation
 
+/// Single source of truth for exchange sub-unit currencies. Some venues quote
+/// prices in 1/100 of the major unit: GBp/GBX = British pence, ILA = Israeli
+/// agorot. Centralised here so the scaling and FX-normalisation rules can't
+/// drift between `StockItem` display values and `StockService` portfolio math.
+enum CurrencyUnit {
+    /// True when prices for this currency code are quoted in sub-units (×1/100).
+    static func isSubUnit(_ currency: String?) -> Bool {
+        let c = currency ?? ""
+        return c == "GBp" || c.uppercased() == "GBX" || c == "ILA"
+    }
+
+    /// Divisor converting a sub-unit price to its major unit (100 for sub-units, else 1).
+    static func subUnitDivisor(_ currency: String?) -> Double {
+        isSubUnit(currency) ? 100.0 : 1.0
+    }
+
+    /// Major-unit ISO code for a quote currency (GBp/GBX -> GBP, ILA -> ILS).
+    /// nil defaults to USD; anything else is upper-cased.
+    static func majorUnitCode(_ currency: String?) -> String {
+        let raw = currency ?? "USD"
+        if raw == "GBp" || raw.uppercased() == "GBX" { return "GBP" }
+        if raw == "ILA" { return "ILS" }
+        return raw.uppercased()
+    }
+}
+
+/// Pure portfolio math, extracted from `StockService` so value/cost/gain are
+/// unit-testable without the @MainActor service, networking, or UserDefaults.
+/// All functions take the data they need explicitly and have no side effects.
+enum PortfolioCalculator {
+    /// FX rate from a stock's currency to `baseCurrency`; nil when a required
+    /// non-base rate is missing (caller should exclude the holding rather than
+    /// value it at parity).
+    static func rate(for stock: StockItem, baseCurrency: String, rates: [String: Double]) -> Double? {
+        let cur = CurrencyUnit.majorUnitCode(stock.currency)
+        if cur == baseCurrency { return 1.0 }
+        return rates[cur]
+    }
+
+    static func totalValue(stocks: [StockItem], holdings: [String: [StockService.Holding]],
+                           baseCurrency: String, rates: [String: Double]) -> Double {
+        stocks.reduce(0) { total, stock in
+            guard let r = rate(for: stock, baseCurrency: baseCurrency, rates: rates) else { return total }
+            return total + (holdings[stock.symbol] ?? []).reduce(0) { $0 + stock.displayPrice * $1.shares * r }
+        }
+    }
+
+    static func totalCost(stocks: [StockItem], holdings: [String: [StockService.Holding]],
+                          baseCurrency: String, rates: [String: Double]) -> Double {
+        stocks.reduce(0) { total, stock in
+            guard let r = rate(for: stock, baseCurrency: baseCurrency, rates: rates) else { return total }
+            return total + (holdings[stock.symbol] ?? []).reduce(0) { acc, lot in
+                guard let cost = lot.costBasis else { return acc }
+                return acc + cost * lot.shares * r
+            }
+        }
+    }
+
+    /// Current value of only the cost-bearing lots — the basis for gain so a
+    /// mixed RSU + purchase portfolio compares like with like.
+    static func costBasisValue(stocks: [StockItem], holdings: [String: [StockService.Holding]],
+                               baseCurrency: String, rates: [String: Double]) -> Double {
+        stocks.reduce(0) { total, stock in
+            guard let r = rate(for: stock, baseCurrency: baseCurrency, rates: rates) else { return total }
+            return total + (holdings[stock.symbol] ?? []).reduce(0) { acc, lot in
+                lot.costBasis == nil ? acc : acc + stock.displayPrice * lot.shares * r
+            }
+        }
+    }
+
+    static func gain(stocks: [StockItem], holdings: [String: [StockService.Holding]],
+                     baseCurrency: String, rates: [String: Double]) -> Double {
+        costBasisValue(stocks: stocks, holdings: holdings, baseCurrency: baseCurrency, rates: rates)
+            - totalCost(stocks: stocks, holdings: holdings, baseCurrency: baseCurrency, rates: rates)
+    }
+
+    static func hasCostBasis(holdings: [String: [StockService.Holding]]) -> Bool {
+        holdings.values.contains { lots in lots.contains { $0.costBasis != nil } }
+    }
+
+    static func hasUnconverted(stocks: [StockItem], holdings: [String: [StockService.Holding]],
+                               baseCurrency: String, rates: [String: Double]) -> Bool {
+        stocks.contains { !(holdings[$0.symbol] ?? []).isEmpty && rate(for: $0, baseCurrency: baseCurrency, rates: rates) == nil }
+    }
+}
+
 struct StockItem: Identifiable, Codable, Equatable {
     let symbol: String
     let name: String
@@ -24,14 +110,12 @@ struct StockItem: Identifiable, Codable, Equatable {
 
     /// Whether the API price is in sub-units (pence, agorot, etc.)
     var isSubUnit: Bool {
-        let c = currency ?? ""
-        // GBp / GBX = British pence, ILA = Israeli agorot
-        return c == "GBp" || c.uppercased() == "GBX" || c == "ILA"
+        CurrencyUnit.isSubUnit(currency)
     }
 
     /// Divisor to convert sub-units to major currency units
     private var subUnitScale: Double {
-        isSubUnit ? 100.0 : 1.0
+        CurrencyUnit.subUnitDivisor(currency)
     }
 
     // MARK: - Display values (converted to major currency units)

@@ -45,10 +45,12 @@ Requires Xcode 15+ and macOS 14+.
 ```bash
 git clone https://github.com/TerrifiedBug/TickerBar.git
 cd TickerBar
-xcodebuild -scheme TickerBar -configuration Release build
+xcodebuild -project TickerBar.xcodeproj -scheme TickerBar -configuration Release -derivedDataPath build build
 ```
 
 The built app will be in `build/Build/Products/Release/TickerBar.app`.
+
+`TickerBar.xcodeproj` is the source of truth for the project configuration — there is no project-generation step.
 
 ## Settings
 
@@ -58,7 +60,6 @@ Click the TickerBar menu bar item to open the watchlist, then click **Settings**
 - Stock rotation toggle and speed (3s to 1 min)
 - Compact / normal menu bar display
 - Show/hide percentage change
-- Only refresh during market hours
 - Launch at login
 - Automatic update checking
 
