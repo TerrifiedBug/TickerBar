@@ -4,6 +4,28 @@ All notable changes to TickerBar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-18
+
+### Added
+- Multi-lot holdings — track multiple RSU (vested, value-only) and purchase lots per stock; add via "Add RSUs…" / "Add Purchase…" in the right-click menu. Cost basis is now optional, so awarded stock can be tracked for value without a purchase price
+- Export & import of your watchlist, holdings, alerts, and base currency as JSON (Settings ▸ Backup)
+- Percent-change and recurring price alerts, alongside the existing absolute-price one-shot alerts
+- Expandable watchlist rows showing 52-week range, pre/post-market, and day range inline (previously hover-only)
+- Home-screen WidgetKit widget showing live prices
+- Notice when a holding is excluded from the portfolio total because its exchange rate hasn't loaded yet
+- `LICENSE` file (MIT)
+
+### Fixed
+- Yahoo Finance requests are now built with `URLComponents`, fixing intermittent authentication failures when the session crumb contained a `+`, and allowing index symbols such as `^GSPC` to resolve
+- A missing exchange rate no longer silently values a foreign holding 1:1 (e.g. a JPY holding counted ~150× too high) — such holdings are excluded from the total with a notice instead
+- Market-hours detection now accounts for the Tokyo and Hong Kong/Shanghai lunch breaks, and prefers Yahoo's reported market state when available
+- The rotating menu-bar item now stays in sync with the rotation index
+- Corrected the README build command and removed a stale settings entry
+
+### Changed
+- Refresh now uses two batched requests (quote + spark) instead of one request per symbol, falling back to the per-symbol path when needed
+- Internal: `StockService` split into focused units (networking, portfolio math, currency), with tests isolated from real preferences and CI running build + tests on every change
+
 ## [1.2.3] - 2026-06-17
 
 ### Fixed
