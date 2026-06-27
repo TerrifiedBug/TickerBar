@@ -157,7 +157,7 @@ jobs:
         run: |
           VERSION="${TAG#v}"
           SHA256=$(shasum -a 256 build/Build/Products/Release/TickerBar.zip | awk '{print $1}')
-          git clone https://x-access-token:${GH_TOKEN}@github.com/TerrifiedBug/homebrew-tickerbar.git /tmp/homebrew-tap
+          git clone https://x-access-token:${GH_TOKEN}@github.com/TerrifiedBug/homebrew-tap.git /tmp/homebrew-tap
           cd /tmp/homebrew-tap
           cat > Casks/tickerbar.rb << 'CASKEOF'
           cask "tickerbar" do
@@ -169,11 +169,12 @@ jobs:
             desc "Lightweight macOS menu bar stock ticker"
             homepage "https://github.com/TerrifiedBug/TickerBar"
 
+            # Ad-hoc build self-updates via Sparkle, so let Homebrew defer to it.
+            auto_updates true
+
             app "TickerBar.app"
 
-            zap trash: [
-              "~/Library/Preferences/com.tickerbar.app.plist",
-            ]
+            zap trash: "~/Library/Preferences/com.tickerbar.app.plist"
           end
           CASKEOF
           sed -i '' "s/REPLACE_VERSION/$VERSION/" Casks/tickerbar.rb
