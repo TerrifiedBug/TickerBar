@@ -24,11 +24,14 @@
 ### Homebrew (recommended)
 
 ```bash
-brew tap TerrifiedBug/tickerbar
-brew install tickerbar
+brew install --cask --no-quarantine terrifiedbug/tap/tickerbar
 ```
 
-Update with `brew upgrade tickerbar`.
+`--no-quarantine` is required because the build is unsigned (no paid Apple Developer ID);
+without it Gatekeeper blocks the app.
+
+Updates land automatically via the in-app updater (Sparkle); you can also re-run the command
+or `brew upgrade --cask tickerbar`.
 
 ### Manual download
 

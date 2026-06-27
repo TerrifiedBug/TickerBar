@@ -127,21 +127,15 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if updateChecker.installedViaBrew {
-                Text("Installed via Homebrew — update with `brew upgrade tickerbar`")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Toggle("Automatically check for updates", isOn: Binding(
-                    get: { updateChecker.automaticallyChecksForUpdates },
-                    set: { updateChecker.automaticallyChecksForUpdates = $0 }
-                ))
+            Toggle("Automatically check for updates", isOn: Binding(
+                get: { updateChecker.automaticallyChecksForUpdates },
+                set: { updateChecker.automaticallyChecksForUpdates = $0 }
+            ))
 
-                Button("Check for Updates") {
-                    updateChecker.checkForUpdates()
-                }
-                .disabled(!updateChecker.canCheckForUpdates)
+            Button("Check for Updates") {
+                updateChecker.checkForUpdates()
             }
+            .disabled(!updateChecker.canCheckForUpdates)
 
             Divider()
 
