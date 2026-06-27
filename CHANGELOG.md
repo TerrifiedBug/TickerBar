@@ -4,6 +4,14 @@ All notable changes to TickerBar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-06-27
+
+### Fixed
+- In-app updates now work for Homebrew installs too. Previously the app disabled the Sparkle updater whenever it detected a Homebrew install and told you to "update with `brew upgrade`"; now "Check for Updates" and automatic checks always work.
+
+### Changed
+- Distribution moved to the shared `terrifiedbug/tap` Homebrew tap: `brew install --cask --no-quarantine terrifiedbug/tap/tickerbar`. The cask sets `auto_updates true` so Homebrew defers to the in-app updater.
+
 ## [1.3.0] - 2026-06-18
 
 ### Added
