@@ -4,6 +4,8 @@ All notable changes to TickerBar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-13
+
 ### Added
 - Custom display names for watchlist stocks, replacing ticker and currency symbols in the menu bar and watchlist for more discreet tracking.
 - Optional live pre-market, after-hours, and overnight prices with extended-session sparklines, compact watchlist indicators, and labeled details when Yahoo provides the data.
