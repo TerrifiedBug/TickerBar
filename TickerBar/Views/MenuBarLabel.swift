@@ -42,7 +42,6 @@ struct MenuBarLabel: View {
         let priceFont = NSFont.monospacedDigitSystemFont(ofSize: 8 * scale, weight: .regular)
         let arrowFont = NSFont.systemFont(ofSize: 6 * scale, weight: .regular)
         let percentFont = NSFont.monospacedDigitSystemFont(ofSize: 7 * scale, weight: .regular)
-        let sessionFont = NSFont.systemFont(ofSize: 6 * scale, weight: .semibold)
 
         // Build line 1: symbol
         let line1 = NSAttributedString(string: displayName, attributes: [
@@ -64,12 +63,6 @@ struct MenuBarLabel: View {
             line2.append(NSAttributedString(string: String(format: "%.1f%%", abs(quote.changePercent)), attributes: [
                 .font: percentFont,
                 .foregroundColor: arrowColor
-            ]))
-        }
-        if let sessionLabel = quote.session.label {
-            line2.append(NSAttributedString(string: " \(sessionLabel)", attributes: [
-                .font: sessionFont,
-                .foregroundColor: NSColor.secondaryLabelColor
             ]))
         }
 
@@ -126,7 +119,6 @@ struct MenuBarLabel: View {
         let priceFont = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular)
         let arrowFont = NSFont.systemFont(ofSize: size * 0.7, weight: .regular)
         let percentFont = NSFont.monospacedDigitSystemFont(ofSize: size * 0.9, weight: .regular)
-        let sessionFont = NSFont.systemFont(ofSize: size * 0.7, weight: .semibold)
 
         let str = NSMutableAttributedString()
         str.append(NSAttributedString(string: displayName, attributes: [
@@ -145,12 +137,6 @@ struct MenuBarLabel: View {
             str.append(NSAttributedString(string: String(format: "%.1f%%", abs(quote.changePercent)), attributes: [
                 .font: percentFont,
                 .foregroundColor: arrowColor
-            ]))
-        }
-        if let sessionLabel = quote.session.label {
-            str.append(NSAttributedString(string: " \(sessionLabel)", attributes: [
-                .font: sessionFont,
-                .foregroundColor: NSColor.secondaryLabelColor
             ]))
         }
 

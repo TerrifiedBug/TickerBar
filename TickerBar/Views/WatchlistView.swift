@@ -623,6 +623,7 @@ struct StockRowView: View {
                             Image(systemName: "moon.fill")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                                .help("Outside regular market hours")
                         }
                     }
                     if displayName == stock.symbol {
@@ -649,12 +650,6 @@ struct StockRowView: View {
                             .font(.caption2)
                         Text(String(format: "%.2f (%.1f%%)", abs(quote.change), abs(quote.changePercent)))
                             .font(.caption)
-                        if let sessionLabel = quote.session.label {
-                            Text(sessionLabel)
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .padding(.leading, 2)
-                        }
                     }
                     .foregroundStyle(quote.isPositive ? .green : .red)
                 }
