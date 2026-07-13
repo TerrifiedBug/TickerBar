@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img width="303" height="504" alt="TickerBar watchlist" src="https://github.com/user-attachments/assets/9c692459-f68a-43cc-9467-77784943cfc8">
+  <img width="303" height="504" alt="TickerBar watchlist" src="https://github.com/user-attachments/assets/3afd246a-989d-4378-bf8e-cedf30a174ff">
 </p>
 
 ## What it does
