@@ -558,9 +558,11 @@ final class StockServiceTests: XCTestCase {
         service.currentDisplayIndex = 0
 
         XCTAssertFalse(service.anyMarketActive)
+        XCTAssertFalse(service.anyRegularMarketOpen)
 
         service.extendedHoursEnabled = true
         XCTAssertTrue(service.anyMarketActive)
+        XCTAssertFalse(service.anyRegularMarketOpen)
         service.advanceDisplay()
         XCTAssertEqual(service.currentDisplayStock?.symbol, "B")
     }

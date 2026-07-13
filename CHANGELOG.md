@@ -10,6 +10,7 @@ All notable changes to TickerBar will be documented in this file.
 
 ### Fixed
 - Stock-row detail chevrons now have a larger click target, so expanding a row no longer requires pixel-perfect accuracy.
+- The “Markets Closed” banner now remains visible during pre-market, after-hours, and overnight sessions, even when live extended-hours prices are enabled.
 
 ## [1.3.1] - 2026-06-27
 
