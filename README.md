@@ -4,49 +4,71 @@
 
 <h1 align="center">TickerBar</h1>
 
-<p align="center">A lightweight macOS menu bar app for tracking stock prices in real-time using Yahoo Finance data. For Free. No "Pro" features.</p>
+<p align="center">A free macOS menu bar app for keeping an eye on stocks. No subscription and no paid tier.</p>
 
 <p align="center">
-<img width="303" height="504" alt="image" src="https://github.com/user-attachments/assets/9c692459-f68a-43cc-9467-77784943cfc8" />
+  <a href="https://github.com/TerrifiedBug/TickerBar/releases"><img src="https://img.shields.io/github/downloads/TerrifiedBug/TickerBar/total" alt="GitHub release downloads"></a>
 </p>
 
-## Features
+<p align="center">
+  <img width="303" height="504" alt="TickerBar watchlist" src="https://github.com/user-attachments/assets/9c692459-f68a-43cc-9467-77784943cfc8">
+</p>
 
-- **Menu bar stock ticker** — see live prices at a glance without opening any app
-- **Compact mode** — stacked two-line display to minimize menu bar space
-- **Stock rotation** — automatically cycle through your watchlist, or pin a single stock; skips closed markets
-- **Sparkline charts** — tiny intraday price charts inline with each stock in the watchlist
-- **Price alerts** — set above/below price targets and get macOS notifications when triggered
-- **Portfolio holdings** — expand the portfolio summary for position values and returns, then open a held stock for its purchase and RSU lot breakdown
-- **Ticker search** — autocomplete suggestions from Yahoo Finance when adding symbols
-- **Custom display names** — replace ticker and currency symbols with private aliases in the menu bar and watchlist
-- **Extended-hours prices** — optionally show live pre-market, after-hours, and overnight quotes without crowding the menu bar
+## What it does
 
-## Installation
+TickerBar keeps the current price in your menu bar. Pin one stock, or let it rotate through the watchlist while closed markets are skipped.
 
-### Homebrew (recommended)
+Open the watchlist to see intraday charts, price alerts, portfolio holdings, and live pre-market, after-hours, or overnight prices when Yahoo provides them. You can search for tickers as you type and give them private display names if you would rather not show the real symbols in your menu bar.
+
+The menu bar has a normal single-line layout and a compact two-line layout. Text size, percentage changes, refresh timing, rotation speed, and the dropdown background are all adjustable.
+
+## Install
+
+### Homebrew
 
 ```bash
 brew install --cask terrifiedbug/tap/tickerbar
 ```
 
-The build is unsigned (no paid Apple Developer ID), so macOS quarantines it. After install, clear it:
-`xattr -dr com.apple.quarantine /Applications/TickerBar.app` (or right-click the app → **Open** once).
+Sparkle handles updates inside the app, or you can update through Homebrew:
 
-Updates land automatically via the in-app updater (Sparkle); you can also re-run the command
-or `brew upgrade --cask tickerbar`.
+```bash
+brew upgrade --cask tickerbar
+```
+
+#### About tap trust
+
+Homebrew 6 requires approval before it loads a non-official tap. The fully qualified install command above trusts only the TickerBar cask.
+
+If you prefer to trust the entire TerrifiedBug tap:
+
+```bash
+brew tap terrifiedbug/tap
+brew trust terrifiedbug/tap
+brew install --cask tickerbar
+```
+
+Trusting the whole tap applies to every current and future formula, cask, and command in that repository. The package-specific install command is the narrower default. Homebrew explains the model in its [tap trust documentation](https://docs.brew.sh/Tap-Trust).
 
 ### Manual download
 
-1. Download `TickerBar.zip` from the [latest release](https://github.com/TerrifiedBug/TickerBar/releases/latest)
-2. Unzip and drag `TickerBar.app` to your Applications folder
-3. On first launch, macOS may show a Gatekeeper warning since the app is not notarized:
-   - Right-click the app and select **Open**, then click **Open** in the dialog
-   - Or run `xattr -cr /Applications/TickerBar.app` in Terminal to remove the quarantine flag
+1. Download `TickerBar.zip` from the [latest release](https://github.com/TerrifiedBug/TickerBar/releases/latest).
+2. Unzip it and move `TickerBar.app` into Applications.
+3. Open TickerBar from Applications.
 
-## Build from Source
+### First launch on macOS
 
-Requires Xcode 15+ and macOS 14+.
+TickerBar currently uses ad hoc signing instead of a paid Apple Developer ID, so macOS may block the first launch. Control-click `TickerBar.app` in Applications, choose **Open**, then confirm **Open** in the dialog.
+
+If macOS still blocks it, remove the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/TickerBar.app
+```
+
+## Build it yourself
+
+You need Xcode 15 or newer and macOS 14 or newer.
 
 ```bash
 git clone https://github.com/TerrifiedBug/TickerBar.git
@@ -54,25 +76,25 @@ cd TickerBar
 xcodebuild -project TickerBar.xcodeproj -scheme TickerBar -configuration Release -derivedDataPath build build
 ```
 
-The built app will be in `build/Build/Products/Release/TickerBar.app`.
+The app will be at `build/Build/Products/Release/TickerBar.app`.
 
-`TickerBar.xcodeproj` is the source of truth for the project configuration — there is no project-generation step.
+`TickerBar.xcodeproj` is the source of truth for the project. There is no project generator to run.
 
 ## Settings
 
-Click the TickerBar menu bar item to open the watchlist, then click **Settings** to configure:
+Open the watchlist and click **Settings**. You can change:
 
-- Refresh interval (30s to 15 min)
-- Stock rotation toggle and speed (3s to 1 min)
-- Compact / normal menu bar display
-- Show/hide percentage change
-- Launch at login
-- Automatic update checking
+- Quote refresh and stock rotation timing
+- The pinned stock and compact menu bar layout
+- Percentage changes, extended-hours prices, and menu bar text size
+- The dropdown background and portfolio currency
+- Launch at login and automatic update checks
+- Portfolio backup and restore
 
 ## Disclaimer
 
-TickerBar is not affiliated, endorsed, or vetted by Yahoo, Inc. It uses Yahoo Finance's publicly available APIs. The data is intended for personal use only. You should refer to Yahoo!'s terms of use for any details on your rights to use the actual data downloaded.
+TickerBar is not affiliated with or endorsed by Yahoo. It reads quote data from Yahoo Finance for personal use. Prices can be delayed or incomplete, so check the source before making a trade. Yahoo's terms govern your use of its data.
 
 ## License
 
-MIT
+TickerBar is released under the [MIT License](LICENSE).
