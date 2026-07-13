@@ -4,6 +4,9 @@ All notable changes to TickerBar will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Stock-row detail chevrons now have a larger click target, so expanding a row no longer requires pixel-perfect accuracy.
+
 ## [1.3.1] - 2026-06-27
 
 ### Fixed

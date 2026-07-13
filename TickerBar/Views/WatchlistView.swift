@@ -612,6 +612,8 @@ struct StockRowView: View {
                         Image(systemName: expanded ? "chevron.up" : "chevron.down")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help("Show details")
