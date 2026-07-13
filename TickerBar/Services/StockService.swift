@@ -263,6 +263,12 @@ final class StockService {
         Self.isOpen(stock) || (extendedHoursEnabled && stock.hasExtendedTradingSession)
     }
 
+    /// Regular-session status for the "Markets Closed" banner.
+    var anyRegularMarketOpen: Bool {
+        if stocks.isEmpty { return Self.isMarketOpen() }
+        return stocks.contains { Self.isOpen($0) }
+    }
+
     /// Returns true if any stock has a session eligible for live display.
     var anyMarketActive: Bool {
         if stocks.isEmpty { return Self.isMarketOpen() }

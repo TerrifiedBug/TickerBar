@@ -53,7 +53,7 @@ struct WatchlistView: View {
             .padding(.bottom, 6)
 
             // Market status
-            if !service.anyMarketActive {
+            if !service.anyRegularMarketOpen {
                 HStack {
                     Image(systemName: "moon.fill")
                         .foregroundStyle(.secondary)
