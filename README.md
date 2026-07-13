@@ -17,6 +17,7 @@
 - **Stock rotation** — automatically cycle through your watchlist, or pin a single stock; skips closed markets
 - **Sparkline charts** — tiny intraday price charts inline with each stock in the watchlist
 - **Price alerts** — set above/below price targets and get macOS notifications when triggered
+- **Portfolio holdings** — expand the portfolio summary for position values and returns, then open a held stock for its purchase and RSU lot breakdown
 - **Ticker search** — autocomplete suggestions from Yahoo Finance when adding symbols
 - **Custom display names** — replace ticker and currency symbols with private aliases in the menu bar and watchlist
 - **Extended-hours prices** — optionally show live pre-market, after-hours, and overnight quotes without crowding the menu bar

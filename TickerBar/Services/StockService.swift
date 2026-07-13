@@ -633,6 +633,10 @@ final class StockService {
         PortfolioCalculator.totalValue(stocks: stocks, holdings: holdings, baseCurrency: baseCurrency, rates: exchangeRates)
     }
 
+    var portfolioPositions: [PortfolioCalculator.Position] {
+        PortfolioCalculator.positions(stocks: stocks, holdings: holdings, baseCurrency: baseCurrency, rates: exchangeRates)
+    }
+
     var totalPortfolioCost: Double {
         PortfolioCalculator.totalCost(stocks: stocks, holdings: holdings, baseCurrency: baseCurrency, rates: exchangeRates)
     }

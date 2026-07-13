@@ -39,6 +39,52 @@ enum PortfolioCalculator {
         return rates[cur]
     }
 
+    struct Position: Equatable, Identifiable {
+        let stock: StockItem
+        let shares: Double
+        let value: Double?
+        let gain: Double?
+        let gainPercent: Double?
+
+        var id: String { stock.symbol }
+    }
+
+    static func positions(stocks: [StockItem], holdings: [String: [StockService.Holding]],
+                          baseCurrency: String, rates: [String: Double]) -> [Position] {
+        stocks.compactMap { stock in
+            let lots = holdings[stock.symbol] ?? []
+            guard !lots.isEmpty else { return nil }
+
+            var shares = 0.0
+            var cost = 0.0
+            var costedValue = 0.0
+            var hasCostBasis = false
+            for lot in lots {
+                shares += lot.shares
+                if let lotCost = lot.costBasis {
+                    hasCostBasis = true
+                    cost += lotCost * lot.shares
+                    costedValue += stock.displayPrice * lot.shares
+                }
+            }
+
+            guard let rate = rate(for: stock, baseCurrency: baseCurrency, rates: rates) else {
+                return Position(stock: stock, shares: shares, value: nil, gain: nil, gainPercent: nil)
+            }
+
+            let convertedCost = cost * rate
+            let gain = hasCostBasis ? (costedValue - cost) * rate : nil
+            let gainPercent = convertedCost > 0 ? gain.map { ($0 / convertedCost) * 100 } : nil
+            return Position(
+                stock: stock,
+                shares: shares,
+                value: stock.displayPrice * shares * rate,
+                gain: gain,
+                gainPercent: gainPercent
+            )
+        }
+    }
+
     static func totalValue(stocks: [StockItem], holdings: [String: [StockService.Holding]],
                            baseCurrency: String, rates: [String: Double]) -> Double {
         stocks.reduce(0) { total, stock in
