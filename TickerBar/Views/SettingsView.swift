@@ -56,7 +56,7 @@ struct SettingsView: View {
                     Spacer()
                     Picker("", selection: $service.pinnedSymbol) {
                         ForEach(service.watchlist, id: \.self) { symbol in
-                            Text(symbol).tag(symbol)
+                            Text(service.displayName(for: symbol)).tag(symbol)
                         }
                     }
                     .labelsHidden()
@@ -69,6 +69,12 @@ struct SettingsView: View {
 
             // Show percent change in menu bar
             Toggle("Show % change in menu bar", isOn: $service.showPercentChange)
+
+            Toggle("Show extended-hours prices", isOn: $service.extendedHoursEnabled)
+                .help("Use pre-market, after-hours, and overnight quotes when Yahoo provides them")
+                .onChange(of: service.extendedHoursEnabled) {
+                    Task { await service.fetchAllQuotes() }
+                }
 
             // Menu bar text size (normal mode)
             HStack {

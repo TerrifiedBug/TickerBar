@@ -46,10 +46,23 @@ final class StockServiceTests: XCTestCase {
         XCTAssertTrue(service.watchlist.contains("NVDA"))
     }
 
+    func testDisplayNameTrimsPersistsAndClears() {
+        let service = StockService(defaults: defaults)
+        service.setDisplayName("  Secret One  ", for: "AAPL")
+
+        XCTAssertEqual(service.displayName(for: "AAPL"), "Secret One")
+        XCTAssertEqual(StockService(defaults: defaults).displayName(for: "AAPL"), "Secret One")
+
+        service.setDisplayName(" \n ", for: "AAPL")
+        XCTAssertEqual(service.displayName(for: "AAPL"), "AAPL")
+    }
+
     func testRemoveSymbol() {
         let service = StockService(defaults: defaults)
+        service.setDisplayName("Private", for: "TSLA")
         service.removeSymbol("TSLA")
         XCTAssertFalse(service.watchlist.contains("TSLA"))
+        XCTAssertNil(service.displayNames["TSLA"])
     }
 
     func testCurrentDisplayIndexWraps() {
@@ -253,6 +266,16 @@ final class StockServiceTests: XCTestCase {
         let s = url!.absoluteString
         XCTAssertTrue(s.contains("crumb=ab%2Bcd"), s)
         XCTAssertFalse(s.contains("crumb=ab+cd"), s)
+    }
+
+    func testChartURLCanIncludeExtendedSessionData() {
+        let url = YahooFinanceClient.chartURL(
+            symbol: "AAPL",
+            crumb: "x",
+            includePrePost: true
+        )
+
+        XCTAssertTrue(url?.absoluteString.contains("includePrePost=true") == true)
     }
 
     func testChartURLResolvesCaretIndexSymbol() {
@@ -527,6 +550,21 @@ final class StockServiceTests: XCTestCase {
         XCTAssertEqual(service.currentDisplayIndex, 1)
     }
 
+    func testExtendedSessionsAreActiveOnlyWhenEnabled() {
+        let service = StockService(defaults: defaults)
+        var closed = stock("A", price: 1); closed.marketState = "CLOSED"
+        var post = stock("B", price: 2); post.marketState = "POST"
+        service.stocks = [closed, post]
+        service.currentDisplayIndex = 0
+
+        XCTAssertFalse(service.anyMarketActive)
+
+        service.extendedHoursEnabled = true
+        XCTAssertTrue(service.anyMarketActive)
+        service.advanceDisplay()
+        XCTAssertEqual(service.currentDisplayStock?.symbol, "B")
+    }
+
     // MARK: - Rotation index sync
 
     func testNormalizeDisplayIndexLandsOnOpenAndMatchesGetter() {
@@ -558,6 +596,7 @@ final class StockServiceTests: XCTestCase {
     func testBackupRoundTrip() {
         let service = StockService(defaults: defaults)
         service.watchlist = ["AAPL", "MSFT"]
+        service.setDisplayName("Private One", for: "AAPL")
         service.addLot(symbol: "AAPL", kind: .purchase, shares: 10, costBasis: 100)
         service.addLot(symbol: "AAPL", kind: .rsu, shares: 5, costBasis: nil)
         service.priceAlerts = [PriceAlert(symbol: "AAPL", targetPrice: 200, isAbove: true)]
@@ -570,9 +609,26 @@ final class StockServiceTests: XCTestCase {
         let restored = StockService(defaults: UserDefaults(suiteName: restoreSuite)!)
         XCTAssertTrue(restored.importBackupData(data))
         XCTAssertEqual(restored.watchlist, ["AAPL", "MSFT"])
+        XCTAssertEqual(restored.displayName(for: "AAPL"), "Private One")
         XCTAssertEqual(restored.lots(for: "AAPL").count, 2)
         XCTAssertEqual(restored.priceAlerts.count, 1)
         XCTAssertEqual(restored.baseCurrency, "GBP")
+    }
+
+    func testImportAcceptsVersionOneBackupWithoutDisplayNames() {
+        let data = """
+        {
+          "schemaVersion": 1,
+          "watchlist": ["AAPL"],
+          "holdings": {},
+          "priceAlerts": [],
+          "baseCurrency": "USD"
+        }
+        """.data(using: .utf8)!
+        let service = StockService(defaults: defaults)
+
+        XCTAssertTrue(service.importBackupData(data))
+        XCTAssertEqual(service.displayName(for: "AAPL"), "AAPL")
     }
 
     func testImportRejectsMalformedData() {
@@ -607,7 +663,9 @@ final class StockServiceTests: XCTestCase {
         {"quoteResponse":{"result":[
           {"symbol":"AAPL","regularMarketPrice":185.0,"regularMarketPreviousClose":183.0,
            "longName":"Apple Inc.","exchangeTimezoneName":"America/New_York","currency":"USD",
-           "regularMarketDayHigh":186.0,"regularMarketDayLow":182.0,"marketState":"REGULAR",
+           "regularMarketDayHigh":186.0,"regularMarketDayLow":182.0,"marketState":"POST",
+           "postMarketPrice":187.0,"postMarketChange":2.0,"postMarketChangePercent":1.08,
+           "extendedMarketPrice":187.0,"extendedMarketChange":2.0,"extendedMarketChangePercent":1.08,
            "fiftyTwoWeekHigh":200.0,"fiftyTwoWeekLow":150.0}
         ]}}
         """.data(using: .utf8)!
@@ -616,8 +674,11 @@ final class StockServiceTests: XCTestCase {
         XCTAssertEqual(aapl?.previousClose, 183.0)
         XCTAssertEqual(aapl?.name, "Apple Inc.")
         XCTAssertEqual(aapl?.currency, "USD")
-        XCTAssertEqual(aapl?.marketState, "REGULAR")
+        XCTAssertEqual(aapl?.marketState, "POST")
         XCTAssertEqual(aapl?.fiftyTwoWeekHigh, 200.0)
+        XCTAssertEqual(aapl?.postMarketPrice, 187.0)
+        XCTAssertEqual(aapl?.postMarketChangePercent, 1.08)
+        XCTAssertEqual(aapl?.extendedMarketPrice, 187.0)
     }
 
     func testParseV7FullSkipsItemsMissingPrice() {
@@ -641,6 +702,12 @@ final class StockServiceTests: XCTestCase {
         XCTAssertTrue(s.contains("/v8/finance/spark"), s)
         XCTAssertTrue(s.contains("symbols=AAPL,MSFT"), s)
         XCTAssertTrue(s.contains("crumb=a%2Bb"), s)
+        let extendedURL = YahooFinanceClient.sparkURL(
+            symbols: ["AAPL"],
+            crumb: "x",
+            includePrePost: true
+        )
+        XCTAssertTrue(extendedURL?.absoluteString.contains("includePrePost=true") == true)
     }
 
     func testLegacyAlertDecodesWithDefaults() {

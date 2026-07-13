@@ -98,13 +98,50 @@ struct StockItem: Identifiable, Codable, Equatable {
     var dayLow: Double? = nil
     var postMarketPrice: Double? = nil
     var postMarketChange: Double? = nil
+    var postMarketChangePercent: Double? = nil
     var preMarketPrice: Double? = nil
     var preMarketChange: Double? = nil
-    var marketState: String? = nil  // PRE, REGULAR, POST, CLOSED
+    var preMarketChangePercent: Double? = nil
+    var extendedMarketPrice: Double? = nil
+    var extendedMarketChange: Double? = nil
+    var extendedMarketChangePercent: Double? = nil
+    var marketState: String? = nil  // PREPRE, PRE, REGULAR, POST, POSTPOST, CLOSED
     var fiftyTwoWeekHigh: Double? = nil
     var fiftyTwoWeekLow: Double? = nil
 
     var id: String { symbol }
+
+    struct DisplayQuote: Equatable {
+        enum Session: Equatable {
+            case regular
+            case preMarket
+            case postMarket
+            case overnight
+
+            var label: String? {
+                switch self {
+                case .regular: nil
+                case .preMarket: "PRE"
+                case .postMarket: "POST"
+                case .overnight: "OVN"
+                }
+            }
+        }
+
+        let price: Double
+        let change: Double
+        let changePercent: Double
+        let session: Session
+
+        var isPositive: Bool { change >= 0 }
+    }
+
+    var hasExtendedTradingSession: Bool {
+        switch marketState {
+        case "PRE", "PREPRE", "POST", "POSTPOST": true
+        default: false
+        }
+    }
 
     // MARK: - Sub-unit currency handling (GBX = pence, ILA = agorot)
 
@@ -129,8 +166,56 @@ struct StockItem: Identifiable, Codable, Equatable {
     var displayPostMarketChange: Double? { postMarketChange.map { $0 / subUnitScale } }
     var displayPreMarketPrice: Double? { preMarketPrice.map { $0 / subUnitScale } }
     var displayPreMarketChange: Double? { preMarketChange.map { $0 / subUnitScale } }
+    var displayExtendedMarketPrice: Double? { extendedMarketPrice.map { $0 / subUnitScale } }
     var display52WeekHigh: Double? { fiftyTwoWeekHigh.map { $0 / subUnitScale } }
     var display52WeekLow: Double? { fiftyTwoWeekLow.map { $0 / subUnitScale } }
+
+    func displayQuote(includeExtendedHours: Bool) -> DisplayQuote {
+        let regular = DisplayQuote(
+            price: displayPrice,
+            change: displayChange,
+            changePercent: changePercent,
+            session: .regular
+        )
+        guard includeExtendedHours else { return regular }
+
+        let extended: (price: Double?, change: Double?, percent: Double?, session: DisplayQuote.Session)
+        switch marketState {
+        case "PRE":
+            extended = (
+                preMarketPrice ?? extendedMarketPrice,
+                preMarketChange ?? extendedMarketChange,
+                preMarketChangePercent ?? extendedMarketChangePercent,
+                .preMarket
+            )
+        case "POST":
+            extended = (
+                postMarketPrice ?? extendedMarketPrice,
+                postMarketChange ?? extendedMarketChange,
+                postMarketChangePercent ?? extendedMarketChangePercent,
+                .postMarket
+            )
+        case "PREPRE", "POSTPOST":
+            extended = (
+                extendedMarketPrice,
+                extendedMarketChange,
+                extendedMarketChangePercent,
+                .overnight
+            )
+        default:
+            return regular
+        }
+
+        guard let rawPrice = extended.price else { return regular }
+        let rawChange = extended.change ?? rawPrice - price
+        let percent = extended.percent ?? (price == 0 ? 0 : rawChange / price * 100)
+        return DisplayQuote(
+            price: rawPrice / subUnitScale,
+            change: rawChange / subUnitScale,
+            changePercent: percent,
+            session: extended.session
+        )
+    }
 
     // MARK: - Computed
 

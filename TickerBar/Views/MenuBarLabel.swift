@@ -26,9 +26,12 @@ struct MenuBarLabel: View {
     }
 
     private func renderCompactImage(_ stock: StockItem) -> NSImage {
-        let arrow = stock.isPositive ? "▲" : "▼"
-        let arrowColor: NSColor = stock.isPositive ? .systemGreen : .systemRed
+        let quote = stock.displayQuote(includeExtendedHours: service.extendedHoursEnabled)
+        let arrow = quote.isPositive ? "▲" : "▼"
+        let arrowColor: NSColor = quote.isPositive ? .systemGreen : .systemRed
         let textColor = NSColor.labelColor
+        let displayName = service.displayName(for: stock.symbol)
+        let currencySymbol = displayName == stock.symbol ? stock.currencySymbol : ""
 
         // Scale the compact two-line glyphs with the menu bar text size
         // (size 10 reproduces the historical defaults). Two stacked lines are
@@ -39,16 +42,17 @@ struct MenuBarLabel: View {
         let priceFont = NSFont.monospacedDigitSystemFont(ofSize: 8 * scale, weight: .regular)
         let arrowFont = NSFont.systemFont(ofSize: 6 * scale, weight: .regular)
         let percentFont = NSFont.monospacedDigitSystemFont(ofSize: 7 * scale, weight: .regular)
+        let sessionFont = NSFont.systemFont(ofSize: 6 * scale, weight: .semibold)
 
         // Build line 1: symbol
-        let line1 = NSAttributedString(string: stock.symbol, attributes: [
+        let line1 = NSAttributedString(string: displayName, attributes: [
             .font: symbolFont,
             .foregroundColor: textColor
         ])
 
         // Build line 2: price + arrow (+ optional percent)
         let line2 = NSMutableAttributedString()
-        line2.append(NSAttributedString(string: "\(stock.currencySymbol)\(String(format: "%.2f", stock.displayPrice))", attributes: [
+        line2.append(NSAttributedString(string: "\(currencySymbol)\(String(format: "%.2f", quote.price))", attributes: [
             .font: priceFont,
             .foregroundColor: textColor
         ]))
@@ -57,9 +61,15 @@ struct MenuBarLabel: View {
             .foregroundColor: arrowColor
         ]))
         if service.showPercentChange {
-            line2.append(NSAttributedString(string: String(format: "%.1f%%", abs(stock.changePercent)), attributes: [
+            line2.append(NSAttributedString(string: String(format: "%.1f%%", abs(quote.changePercent)), attributes: [
                 .font: percentFont,
                 .foregroundColor: arrowColor
+            ]))
+        }
+        if let sessionLabel = quote.session.label {
+            line2.append(NSAttributedString(string: " \(sessionLabel)", attributes: [
+                .font: sessionFont,
+                .foregroundColor: NSColor.secondaryLabelColor
             ]))
         }
 
@@ -102,9 +112,12 @@ struct MenuBarLabel: View {
     }
 
     private func renderNormalImage(_ stock: StockItem) -> NSImage {
-        let arrow = stock.isPositive ? "▲" : "▼"
-        let arrowColor: NSColor = stock.isPositive ? .systemGreen : .systemRed
+        let quote = stock.displayQuote(includeExtendedHours: service.extendedHoursEnabled)
+        let arrow = quote.isPositive ? "▲" : "▼"
+        let arrowColor: NSColor = quote.isPositive ? .systemGreen : .systemRed
         let textColor = NSColor.labelColor
+        let displayName = service.displayName(for: stock.symbol)
+        let currencySymbol = displayName == stock.symbol ? stock.currencySymbol : ""
 
         // Menu bar text size is user-configurable; size 10 reproduces the
         // historical default. Secondary glyphs scale proportionally.
@@ -113,13 +126,14 @@ struct MenuBarLabel: View {
         let priceFont = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular)
         let arrowFont = NSFont.systemFont(ofSize: size * 0.7, weight: .regular)
         let percentFont = NSFont.monospacedDigitSystemFont(ofSize: size * 0.9, weight: .regular)
+        let sessionFont = NSFont.systemFont(ofSize: size * 0.7, weight: .semibold)
 
         let str = NSMutableAttributedString()
-        str.append(NSAttributedString(string: stock.symbol, attributes: [
+        str.append(NSAttributedString(string: displayName, attributes: [
             .font: symbolFont,
             .foregroundColor: textColor
         ]))
-        str.append(NSAttributedString(string: " \(stock.currencySymbol)\(String(format: "%.2f", stock.displayPrice))", attributes: [
+        str.append(NSAttributedString(string: " \(currencySymbol)\(String(format: "%.2f", quote.price))", attributes: [
             .font: priceFont,
             .foregroundColor: textColor
         ]))
@@ -128,9 +142,15 @@ struct MenuBarLabel: View {
             .foregroundColor: arrowColor
         ]))
         if service.showPercentChange {
-            str.append(NSAttributedString(string: String(format: "%.1f%%", abs(stock.changePercent)), attributes: [
+            str.append(NSAttributedString(string: String(format: "%.1f%%", abs(quote.changePercent)), attributes: [
                 .font: percentFont,
                 .foregroundColor: arrowColor
+            ]))
+        }
+        if let sessionLabel = quote.session.label {
+            str.append(NSAttributedString(string: " \(sessionLabel)", attributes: [
+                .font: sessionFont,
+                .foregroundColor: NSColor.secondaryLabelColor
             ]))
         }
 

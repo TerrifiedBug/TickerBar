@@ -66,6 +66,82 @@ final class StockItemTests: XCTestCase {
         XCTAssertEqual(stock.changePercent, 0.0)
     }
 
+    // MARK: - Extended-hours display
+
+    func testDisplayQuoteUsesRegularPriceWhenExtendedHoursDisabled() {
+        var stock = StockItem(symbol: "AAPL", name: "Apple", price: 100, previousClose: 95)
+        stock.marketState = "POST"
+        stock.postMarketPrice = 102
+        stock.postMarketChange = 2
+        stock.postMarketChangePercent = 2
+
+        let quote = stock.displayQuote(includeExtendedHours: false)
+
+        XCTAssertEqual(quote.price, 100)
+        XCTAssertEqual(quote.change, 5)
+        XCTAssertEqual(quote.session, .regular)
+    }
+
+    func testDisplayQuoteSelectsPreAndPostMarketValues() {
+        var stock = StockItem(symbol: "AAPL", name: "Apple", price: 100, previousClose: 95)
+        stock.marketState = "PRE"
+        stock.preMarketPrice = 98
+        stock.preMarketChange = -2
+        stock.preMarketChangePercent = -2
+
+        var quote = stock.displayQuote(includeExtendedHours: true)
+        XCTAssertEqual(quote.price, 98)
+        XCTAssertEqual(quote.change, -2)
+        XCTAssertEqual(quote.changePercent, -2)
+        XCTAssertEqual(quote.session, .preMarket)
+
+        stock.marketState = "POST"
+        stock.postMarketPrice = 103
+        stock.postMarketChange = 3
+        stock.postMarketChangePercent = 3
+
+        quote = stock.displayQuote(includeExtendedHours: true)
+        XCTAssertEqual(quote.price, 103)
+        XCTAssertEqual(quote.change, 3)
+        XCTAssertEqual(quote.changePercent, 3)
+        XCTAssertEqual(quote.session, .postMarket)
+    }
+
+    func testOvernightQuoteRequiresUnifiedExtendedPrice() {
+        var stock = StockItem(symbol: "AAPL", name: "Apple", price: 100, previousClose: 95)
+        stock.marketState = "POSTPOST"
+        stock.postMarketPrice = 103
+
+        XCTAssertEqual(stock.displayQuote(includeExtendedHours: true).session, .regular)
+
+        stock.extendedMarketPrice = 101
+        stock.extendedMarketChange = 1
+        stock.extendedMarketChangePercent = 1
+
+        let quote = stock.displayQuote(includeExtendedHours: true)
+        XCTAssertEqual(quote.price, 101)
+        XCTAssertEqual(quote.change, 1)
+        XCTAssertEqual(quote.session, .overnight)
+    }
+
+    func testExtendedQuoteUsesSubUnitCurrencyScaling() {
+        var stock = StockItem(
+            symbol: "VOD.L",
+            name: "Vodafone",
+            price: 250,
+            previousClose: 240,
+            currency: "GBX"
+        )
+        stock.marketState = "POST"
+        stock.postMarketPrice = 255
+        stock.postMarketChange = 5
+
+        let quote = stock.displayQuote(includeExtendedHours: true)
+
+        XCTAssertEqual(quote.price, 2.55, accuracy: 0.0001)
+        XCTAssertEqual(quote.change, 0.05, accuracy: 0.0001)
+    }
+
     // MARK: - CurrencyUnit + sub-unit scaling
 
     func testCurrencyUnitSubUnitDetection() {

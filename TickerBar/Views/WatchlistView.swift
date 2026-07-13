@@ -10,6 +10,9 @@ struct WatchlistView: View {
     @State private var isValidating = false
     @State private var searchResults: [StockService.SymbolSearchResult] = []
     @State private var searchTask: Task<Void, Never>?
+    @State private var displayNameSymbol: String?
+    @State private var displayNameText = ""
+    @State private var showingDisplayNameEditor = false
     @State private var alertSymbol: String?
     @State private var alertPriceText = ""
     @State private var alertIsAbove = true
@@ -50,7 +53,7 @@ struct WatchlistView: View {
             .padding(.bottom, 6)
 
             // Market status
-            if service.marketHoursOnly && !service.anyMarketOpen {
+            if !service.anyMarketActive {
                 HStack {
                     Image(systemName: "moon.fill")
                         .foregroundStyle(.secondary)
@@ -110,7 +113,13 @@ struct WatchlistView: View {
                     .padding(12)
             } else {
                 ForEach(Array(service.stocks.enumerated()), id: \.element.id) { index, stock in
-                    StockRowView(stock: stock, hasAlert: !service.alertsForSymbol(stock.symbol).isEmpty, lots: service.lots(for: stock.symbol))
+                    StockRowView(
+                        stock: stock,
+                        displayName: service.displayName(for: stock.symbol),
+                        includeExtendedHours: service.extendedHoursEnabled,
+                        hasAlert: !service.alertsForSymbol(stock.symbol).isEmpty,
+                        lots: service.lots(for: stock.symbol)
+                    )
                         .onTapGesture {
                             openYahooFinance(symbol: stock.symbol)
                         }
@@ -124,6 +133,13 @@ struct WatchlistView: View {
                                 Button("Move Down") {
                                     withAnimation { service.moveSymbol(from: index, to: index + 1) }
                                 }
+                            }
+
+                            Divider()
+                            Button(service.displayNames[stock.symbol] == nil ? "Set Display Name..." : "Edit Display Name...") {
+                                displayNameSymbol = stock.symbol
+                                displayNameText = service.displayNames[stock.symbol] ?? ""
+                                showingDisplayNameEditor = true
                             }
 
                             Divider()
@@ -425,6 +441,25 @@ struct WatchlistView: View {
                 MenuBarWindowResizer(targetHeight: proxy.size.height)
             }
         )
+        .alert("Display Name", isPresented: $showingDisplayNameEditor) {
+            TextField("Alias", text: $displayNameText)
+            Button("Cancel", role: .cancel) {}
+            if let symbol = displayNameSymbol, service.displayNames[symbol] != nil {
+                Button("Clear", role: .destructive) {
+                    service.setDisplayName("", for: symbol)
+                }
+            }
+            Button("Save") {
+                if let symbol = displayNameSymbol {
+                    service.setDisplayName(displayNameText, for: symbol)
+                }
+            }
+            .disabled(displayNameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            if let symbol = displayNameSymbol {
+                Text("Replaces \(symbol) and hides the currency symbol in the menu bar and watchlist.")
+            }
+        }
     }
 
     // MARK: - Alert + holdings helpers
@@ -516,6 +551,8 @@ struct WatchlistView: View {
 
 struct StockRowView: View {
     let stock: StockItem
+    let displayName: String
+    let includeExtendedHours: Bool
     var hasAlert: Bool = false
     var lots: [StockService.Holding] = []
     @State private var expanded = false
@@ -536,6 +573,10 @@ struct StockRowView: View {
         if let pmPrice = stock.displayPreMarketPrice, let pmChange = stock.displayPreMarketChange {
             lines.append("Pre-Market: \(cs)\(String(format: "%.2f", pmPrice)) (\(String(format: "%+.2f", pmChange)))")
         }
+        let overnightQuote = stock.displayQuote(includeExtendedHours: true)
+        if overnightQuote.session == .overnight {
+            lines.append("Overnight: \(cs)\(String(format: "%.2f", overnightQuote.price)) (\(String(format: "%+.2f", overnightQuote.change)))")
+        }
         for lot in lots {
             let value = stock.displayPrice * lot.shares
             if let cost = lot.costBasis {
@@ -549,21 +590,24 @@ struct StockRowView: View {
             lines.append("Market: \(state)")
         }
 
-        return lines.isEmpty ? stock.name : lines.joined(separator: "\n")
+        return lines.isEmpty ? displayName : lines.joined(separator: "\n")
     }
 
     /// Whether any of the extra detail fields are available to show.
     private var hasDetail: Bool {
         stock.displayDayHigh != nil || stock.display52WeekHigh != nil
             || stock.displayPostMarketPrice != nil || stock.displayPreMarketPrice != nil
+            || stock.displayExtendedMarketPrice != nil
     }
 
     var body: some View {
+        let quote = stock.displayQuote(includeExtendedHours: includeExtendedHours)
+        let currencySymbol = displayName == stock.symbol ? stock.currencySymbol : ""
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
-                        Text(stock.symbol)
+                        Text(displayName)
                             .font(.system(.body, design: .monospaced, weight: .semibold))
                         if hasAlert {
                             Image(systemName: "bell.fill")
@@ -581,30 +625,38 @@ struct StockRowView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Text(stock.name)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    if displayName == stock.symbol {
+                        Text(stock.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer()
 
                 if stock.intradayPrices.count >= 2 {
-                    SparklineView(prices: stock.intradayPrices, isPositive: stock.isPositive)
+                    SparklineView(prices: stock.intradayPrices, isPositive: quote.isPositive)
                         .frame(width: 50, height: 20)
                 }
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(stock.currencySymbol)\(String(format: "%.2f", stock.displayPrice))")
+                    Text("\(currencySymbol)\(String(format: "%.2f", quote.price))")
                         .font(.system(.body, design: .monospaced))
 
                     HStack(spacing: 2) {
-                        Image(systemName: stock.isPositive ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                        Image(systemName: quote.isPositive ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
                             .font(.caption2)
-                        Text(String(format: "%.2f (%.1f%%)", abs(stock.displayChange), abs(stock.changePercent)))
+                        Text(String(format: "%.2f (%.1f%%)", abs(quote.change), abs(quote.changePercent)))
                             .font(.caption)
+                        if let sessionLabel = quote.session.label {
+                            Text(sessionLabel)
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.leading, 2)
+                        }
                     }
-                    .foregroundStyle(stock.isPositive ? .green : .red)
+                    .foregroundStyle(quote.isPositive ? .green : .red)
                 }
 
                 if hasDetail {
@@ -644,6 +696,10 @@ struct StockRowView: View {
             }
             if let pm = stock.displayPreMarketPrice, let pmc = stock.displayPreMarketChange {
                 detailRow("Pre-market", "\(cs)\(fmt(pm)) (\(fmtSigned(pmc)))")
+            }
+            let overnightQuote = stock.displayQuote(includeExtendedHours: true)
+            if overnightQuote.session == .overnight {
+                detailRow("Overnight", "\(cs)\(fmt(overnightQuote.price)) (\(fmtSigned(overnightQuote.change)))")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

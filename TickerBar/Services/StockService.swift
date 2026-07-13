@@ -16,6 +16,9 @@ final class StockService {
     var watchlist: [String] {
         didSet { defaults.set(watchlist, forKey: "watchlist") }
     }
+    var displayNames: [String: String] {
+        didSet { defaults.set(displayNames, forKey: "displayNames") }
+    }
     var refreshInterval: TimeInterval {
         didSet { defaults.set(refreshInterval, forKey: "refreshInterval"); restartRefreshTimer() }
     }
@@ -28,8 +31,8 @@ final class StockService {
     var pinnedSymbol: String {
         didSet { defaults.set(pinnedSymbol, forKey: "pinnedSymbol") }
     }
-    var marketHoursOnly: Bool {
-        didSet { defaults.set(marketHoursOnly, forKey: "marketHoursOnly") }
+    var extendedHoursEnabled: Bool {
+        didSet { defaults.set(extendedHoursEnabled, forKey: "extendedHoursEnabled") }
     }
     var showPercentChange: Bool {
         didSet { defaults.set(showPercentChange, forKey: "showPercentChange") }
@@ -114,11 +117,12 @@ final class StockService {
         } else {
             self.watchlist = Self.defaultWatchlist
         }
+        self.displayNames = defaults.dictionary(forKey: "displayNames") as? [String: String] ?? [:]
         self.refreshInterval = defaults.double(forKey: "refreshInterval").nonZero ?? 60
         self.rotationEnabled = defaults.object(forKey: "rotationEnabled") as? Bool ?? true
         self.rotationSpeed = defaults.double(forKey: "rotationSpeed").nonZero ?? 5
         self.pinnedSymbol = defaults.string(forKey: "pinnedSymbol") ?? Self.defaultWatchlist[0]
-        self.marketHoursOnly = defaults.object(forKey: "marketHoursOnly") as? Bool ?? true
+        self.extendedHoursEnabled = defaults.bool(forKey: "extendedHoursEnabled")
         self.showPercentChange = defaults.object(forKey: "showPercentChange") as? Bool ?? true
         self.compactMenuBar = defaults.object(forKey: "compactMenuBar") as? Bool ?? false
         self.baseCurrency = defaults.string(forKey: "baseCurrency") ?? "USD"
@@ -162,9 +166,9 @@ final class StockService {
     func normalizeDisplayIndex() {
         guard rotationEnabled, !stocks.isEmpty else { return }
         let bounded = currentDisplayIndex % stocks.count
-        if !Self.isOpen(stocks[bounded]),
-           let openIdx = stocks.firstIndex(where: { Self.isOpen($0) }) {
-            currentDisplayIndex = openIdx
+        if !isDisplayActive(stocks[bounded]),
+           let activeIndex = stocks.firstIndex(where: isDisplayActive) {
+            currentDisplayIndex = activeIndex
         } else {
             currentDisplayIndex = bounded
         }
@@ -177,22 +181,19 @@ final class StockService {
     func advanceDisplay() {
         guard !stocks.isEmpty, rotationEnabled else { return }
 
-        let openStocks = stocks.enumerated().filter {
-            Self.isOpen($0.element)
-        }
-
-        if openStocks.isEmpty {
+        if !stocks.contains(where: isDisplayActive) {
             // All markets closed — rotate through everything
             currentDisplayIndex = (currentDisplayIndex + 1) % stocks.count
-        } else {
-            // Find the next open stock after current index
-            let startIndex = currentDisplayIndex
-            for offset in 1...stocks.count {
-                let candidate = (startIndex + offset) % stocks.count
-                if Self.isOpen(stocks[candidate]) {
-                    currentDisplayIndex = candidate
-                    return
-                }
+            return
+        }
+
+        // Find the next active stock after the current index.
+        let startIndex = currentDisplayIndex
+        for offset in 1...stocks.count {
+            let candidate = (startIndex + offset) % stocks.count
+            if isDisplayActive(stocks[candidate]) {
+                currentDisplayIndex = candidate
+                return
             }
         }
     }
@@ -258,16 +259,20 @@ final class StockService {
         return isMarketOpen(timezoneName: stock.exchangeTimezoneName, at: date)
     }
 
-    /// Returns true if any stock in the watchlist has its market open
-    var anyMarketOpen: Bool {
+    private func isDisplayActive(_ stock: StockItem) -> Bool {
+        Self.isOpen(stock) || (extendedHoursEnabled && stock.hasExtendedTradingSession)
+    }
+
+    /// Returns true if any stock has a session eligible for live display.
+    var anyMarketActive: Bool {
         if stocks.isEmpty { return Self.isMarketOpen() }
-        return stocks.contains { Self.isOpen($0) }
+        return stocks.contains(where: isDisplayActive)
     }
 
     func fetchAllQuotes(isTimerTriggered: Bool = false) async {
-        // Only skip fetching for automatic timer refreshes when all markets are closed.
+        // Timer refreshes pause only when every supported session is closed.
         // Manual refreshes, initial load, and add-stock fetches always proceed.
-        if isTimerTriggered && marketHoursOnly && !anyMarketOpen {
+        if isTimerTriggered && !anyMarketActive {
             return
         }
 
@@ -291,12 +296,20 @@ final class StockService {
         // through to the resilient per-symbol path below, so a partial or
         // unexpected batch response can never regress the display.
         if !symbols.isEmpty,
-           let batch = await api.fetchBatch(symbols: symbols, crumb: api.currentCrumb),
+           let batch = await api.fetchBatch(
+               symbols: symbols,
+               crumb: api.currentCrumb,
+               includePrePost: extendedHoursEnabled
+           ),
            batch.count == symbols.count {
             enriched = batch
         } else {
             // First attempt with the current crumb.
-            var result = await api.fetchQuotes(symbols: symbols, crumb: api.currentCrumb)
+            var result = await api.fetchQuotes(
+                symbols: symbols,
+                crumb: api.currentCrumb,
+                includePrePost: extendedHoursEnabled
+            )
 
             // If every symbol failed with an auth error, the crumb/cookie has likely
             // expired. Re-authenticate and retry once — the same recovery a manual
@@ -305,7 +318,11 @@ final class StockService {
                 api.invalidateAuth()
                 do {
                     try await api.ensureAuth()
-                    result = await api.fetchQuotes(symbols: symbols, crumb: api.currentCrumb)
+                    result = await api.fetchQuotes(
+                        symbols: symbols,
+                        crumb: api.currentCrumb,
+                        includePrePost: extendedHoursEnabled
+                    )
                 } catch {
                     // Re-auth failed; fall through to keep-last-good handling below.
                 }
@@ -329,8 +346,13 @@ final class StockService {
                     if let extra = v7Data[perSymbol[i].symbol] {
                         perSymbol[i].postMarketPrice = extra.postMarketPrice
                         perSymbol[i].postMarketChange = extra.postMarketChange
+                        perSymbol[i].postMarketChangePercent = extra.postMarketChangePercent
                         perSymbol[i].preMarketPrice = extra.preMarketPrice
                         perSymbol[i].preMarketChange = extra.preMarketChange
+                        perSymbol[i].preMarketChangePercent = extra.preMarketChangePercent
+                        perSymbol[i].extendedMarketPrice = extra.extendedMarketPrice
+                        perSymbol[i].extendedMarketChange = extra.extendedMarketChange
+                        perSymbol[i].extendedMarketChangePercent = extra.extendedMarketChangePercent
                         perSymbol[i].marketState = extra.marketState
                         perSymbol[i].fiftyTwoWeekHigh = extra.fiftyTwoWeekHigh
                         perSymbol[i].fiftyTwoWeekLow = extra.fiftyTwoWeekLow
@@ -392,6 +414,19 @@ final class StockService {
         watchlist.append(uppercased)
     }
 
+    func displayName(for symbol: String) -> String {
+        displayNames[symbol] ?? symbol
+    }
+
+    func setDisplayName(_ name: String, for symbol: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            displayNames.removeValue(forKey: symbol)
+        } else {
+            displayNames[symbol] = trimmed
+        }
+    }
+
     /// Validate a ticker by attempting to fetch its quote. Returns nil on success, or an error message.
     func validateSymbol(_ symbol: String) async -> String? {
         do {
@@ -415,6 +450,7 @@ final class StockService {
         stocks.removeAll { $0.symbol == symbol }
         priceAlerts.removeAll { $0.symbol == symbol }
         holdings.removeValue(forKey: symbol)
+        displayNames.removeValue(forKey: symbol)
         normalizeDisplayIndex()
     }
 
@@ -545,17 +581,19 @@ final class StockService {
     struct PortfolioBackup: Codable {
         var schemaVersion: Int
         var watchlist: [String]
+        var displayNames: [String: String]?
         var holdings: [String: [Holding]]
         var priceAlerts: [PriceAlert]
         var baseCurrency: String
     }
 
-    static let backupSchemaVersion = 1
+    static let backupSchemaVersion = 2
 
     func exportBackupData() throws -> Data {
         let backup = PortfolioBackup(
             schemaVersion: Self.backupSchemaVersion,
             watchlist: watchlist,
+            displayNames: displayNames,
             holdings: holdings,
             priceAlerts: priceAlerts,
             baseCurrency: baseCurrency
@@ -573,6 +611,7 @@ final class StockService {
         guard let backup = try? JSONDecoder().decode(PortfolioBackup.self, from: data),
               !backup.watchlist.isEmpty else { return false }
         watchlist = backup.watchlist
+        displayNames = (backup.displayNames ?? [:]).filter { backup.watchlist.contains($0.key) }
         holdings = backup.holdings
         priceAlerts = backup.priceAlerts
         if Self.supportedBaseCurrencies.contains(backup.baseCurrency) {
@@ -778,7 +817,7 @@ final class YahooFinanceClient {
         return components.url
     }
 
-    nonisolated static func chartURL(symbol: String, crumb: String) -> URL? {
+    nonisolated static func chartURL(symbol: String, crumb: String, includePrePost: Bool = false) -> URL? {
         var pathAllowed = CharacterSet.urlPathAllowed
         pathAllowed.remove(charactersIn: "/")
         let encodedSymbol = symbol.addingPercentEncoding(withAllowedCharacters: pathAllowed) ?? symbol
@@ -786,7 +825,7 @@ final class YahooFinanceClient {
         components.scheme = "https"
         components.host = "query2.finance.yahoo.com"
         components.percentEncodedPath = "/v8/finance/chart/\(encodedSymbol)"
-        components.percentEncodedQuery = "interval=5m&range=1d&crumb=\(encodedQueryValue(crumb))"
+        components.percentEncodedQuery = "interval=5m&range=1d&includePrePost=\(includePrePost)&crumb=\(encodedQueryValue(crumb))"
         return components.url
     }
 
@@ -818,11 +857,15 @@ final class YahooFinanceClient {
     /// Fetch all symbols concurrently. Returns successfully-parsed items plus a
     /// count of auth failures (HTTP 401/403) so the caller can decide whether to
     /// re-authenticate and retry.
-    func fetchQuotes(symbols: [String], crumb: String?) async -> (items: [StockItem], authFailures: Int) {
+    func fetchQuotes(
+        symbols: [String],
+        crumb: String?,
+        includePrePost: Bool = false
+    ) async -> (items: [StockItem], authFailures: Int) {
         await withTaskGroup(of: FetchOutcome.self) { group in
             for symbol in symbols {
                 group.addTask {
-                    await Self.fetchQuote(for: symbol, crumb: crumb)
+                    await Self.fetchQuote(for: symbol, crumb: crumb, includePrePost: includePrePost)
                 }
             }
             var items: [StockItem] = []
@@ -843,9 +886,13 @@ final class YahooFinanceClient {
         await Self.fetchQuote(for: symbol, crumb: crumb)
     }
 
-    nonisolated static func fetchQuote(for symbol: String, crumb: String?) async -> FetchOutcome {
+    nonisolated static func fetchQuote(
+        for symbol: String,
+        crumb: String?,
+        includePrePost: Bool = false
+    ) async -> FetchOutcome {
         guard let crumb else { return .failure }
-        guard let url = chartURL(symbol: symbol, crumb: crumb) else { return .failure }
+        guard let url = chartURL(symbol: symbol, crumb: crumb, includePrePost: includePrePost) else { return .failure }
 
         do {
             let (data, response) = try await session.data(from: url)
@@ -899,8 +946,13 @@ final class YahooFinanceClient {
     struct V7QuoteData {
         var postMarketPrice: Double?
         var postMarketChange: Double?
+        var postMarketChangePercent: Double?
         var preMarketPrice: Double?
         var preMarketChange: Double?
+        var preMarketChangePercent: Double?
+        var extendedMarketPrice: Double?
+        var extendedMarketChange: Double?
+        var extendedMarketChangePercent: Double?
         var marketState: String?
         var fiftyTwoWeekHigh: Double?
         var fiftyTwoWeekLow: Double?
@@ -925,8 +977,13 @@ final class YahooFinanceClient {
                 dict[symbol] = V7QuoteData(
                     postMarketPrice: quote["postMarketPrice"] as? Double,
                     postMarketChange: quote["postMarketChange"] as? Double,
+                    postMarketChangePercent: quote["postMarketChangePercent"] as? Double,
                     preMarketPrice: quote["preMarketPrice"] as? Double,
                     preMarketChange: quote["preMarketChange"] as? Double,
+                    preMarketChangePercent: quote["preMarketChangePercent"] as? Double,
+                    extendedMarketPrice: quote["extendedMarketPrice"] as? Double,
+                    extendedMarketChange: quote["extendedMarketChange"] as? Double,
+                    extendedMarketChangePercent: quote["extendedMarketChangePercent"] as? Double,
                     marketState: quote["marketState"] as? String,
                     fiftyTwoWeekHigh: quote["fiftyTwoWeekHigh"] as? Double,
                     fiftyTwoWeekLow: quote["fiftyTwoWeekLow"] as? Double
@@ -968,11 +1025,16 @@ final class YahooFinanceClient {
 
     // MARK: - Batch fetching (v7 quote + v8 spark)
 
-    nonisolated static func sparkURL(symbols: [String], crumb: String) -> URL? {
+    nonisolated static func sparkURL(
+        symbols: [String],
+        crumb: String,
+        includePrePost: Bool = false
+    ) -> URL? {
         yahooURL(path: "/v8/finance/spark", query: [
             ("symbols", symbols.joined(separator: ",")),
             ("range", "1d"),
             ("interval", "5m"),
+            ("includePrePost", includePrePost ? "true" : "false"),
             ("crumb", crumb),
         ])
     }
@@ -982,10 +1044,18 @@ final class YahooFinanceClient {
     /// ONLY when both calls cover every symbol with a usable sparkline;
     /// otherwise nil, so the caller falls back to the per-symbol path and the
     /// display is never degraded by a partial/unexpected batch response.
-    func fetchBatch(symbols: [String], crumb: String?) async -> [StockItem]? {
+    func fetchBatch(
+        symbols: [String],
+        crumb: String?,
+        includePrePost: Bool = false
+    ) async -> [StockItem]? {
         guard let crumb, !symbols.isEmpty,
               let v7url = Self.quoteURL(symbols: symbols, crumb: crumb),
-              let sparkurl = Self.sparkURL(symbols: symbols, crumb: crumb) else { return nil }
+              let sparkurl = Self.sparkURL(
+                  symbols: symbols,
+                  crumb: crumb,
+                  includePrePost: includePrePost
+              ) else { return nil }
 
         async let v7Resp = Self.session.data(from: v7url)
         async let sparkResp = Self.session.data(from: sparkurl)
@@ -1036,8 +1106,13 @@ final class YahooFinanceClient {
             )
             item.postMarketPrice = q["postMarketPrice"] as? Double
             item.postMarketChange = q["postMarketChange"] as? Double
+            item.postMarketChangePercent = q["postMarketChangePercent"] as? Double
             item.preMarketPrice = q["preMarketPrice"] as? Double
             item.preMarketChange = q["preMarketChange"] as? Double
+            item.preMarketChangePercent = q["preMarketChangePercent"] as? Double
+            item.extendedMarketPrice = q["extendedMarketPrice"] as? Double
+            item.extendedMarketChange = q["extendedMarketChange"] as? Double
+            item.extendedMarketChangePercent = q["extendedMarketChangePercent"] as? Double
             item.marketState = q["marketState"] as? String
             item.fiftyTwoWeekHigh = q["fiftyTwoWeekHigh"] as? Double
             item.fiftyTwoWeekLow = q["fiftyTwoWeekLow"] as? Double
