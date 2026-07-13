@@ -18,6 +18,8 @@
 - **Sparkline charts** — tiny intraday price charts inline with each stock in the watchlist
 - **Price alerts** — set above/below price targets and get macOS notifications when triggered
 - **Ticker search** — autocomplete suggestions from Yahoo Finance when adding symbols
+- **Custom display names** — replace ticker and currency symbols with private aliases in the menu bar and watchlist
+- **Extended-hours prices** — optionally show live pre-market, after-hours, and overnight quotes with clear session labels
 
 ## Installation
 
