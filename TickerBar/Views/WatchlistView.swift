@@ -12,7 +12,6 @@ struct WatchlistView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var displayNameSymbol: String?
     @State private var displayNameText = ""
-    @State private var showingDisplayNameEditor = false
     @State private var alertSymbol: String?
     @State private var alertPriceText = ""
     @State private var alertIsAbove = true
@@ -121,7 +120,6 @@ struct WatchlistView: View {
                             Button(service.displayNames[stock.symbol] == nil ? "Set Display Name..." : "Edit Display Name...") {
                                 displayNameSymbol = stock.symbol
                                 displayNameText = service.displayNames[stock.symbol] ?? ""
-                                showingDisplayNameEditor = true
                             }
 
                             Divider()
@@ -183,6 +181,45 @@ struct WatchlistView: View {
                             }
                         }
                 }
+            }
+
+            // Display name input
+            if let symbol = displayNameSymbol {
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Display name for \(symbol)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Button(action: { displayNameSymbol = nil }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Text("Replaces the ticker and hides its currency symbol in the menu bar and watchlist.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: 8) {
+                        TextField("Alias", text: $displayNameText)
+                            .textFieldStyle(.roundedBorder)
+                        if service.displayNames[symbol] != nil {
+                            Button("Clear", role: .destructive) {
+                                service.setDisplayName("", for: symbol)
+                                displayNameSymbol = nil
+                            }
+                        }
+                        Button("Save") {
+                            service.setDisplayName(displayNameText, for: symbol)
+                            displayNameSymbol = nil
+                        }
+                        .disabled(displayNameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.background.opacity(0.5))
             }
 
             // Price alert input
@@ -423,25 +460,6 @@ struct WatchlistView: View {
                 MenuBarWindowResizer(targetHeight: proxy.size.height)
             }
         )
-        .alert("Display Name", isPresented: $showingDisplayNameEditor) {
-            TextField("Alias", text: $displayNameText)
-            Button("Cancel", role: .cancel) {}
-            if let symbol = displayNameSymbol, service.displayNames[symbol] != nil {
-                Button("Clear", role: .destructive) {
-                    service.setDisplayName("", for: symbol)
-                }
-            }
-            Button("Save") {
-                if let symbol = displayNameSymbol {
-                    service.setDisplayName(displayNameText, for: symbol)
-                }
-            }
-            .disabled(displayNameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-            if let symbol = displayNameSymbol {
-                Text("Replaces \(symbol) and hides the currency symbol in the menu bar and watchlist.")
-            }
-        }
     }
 
     // MARK: - Alert + holdings helpers

@@ -4,6 +4,9 @@ All notable changes to TickerBar will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Display-name editing now stays inside the menu-bar panel, so its controls respond to mouse clicks instead of dismissing the panel.
+
 ## [1.4.0] - 2026-07-13
 
 ### Added
