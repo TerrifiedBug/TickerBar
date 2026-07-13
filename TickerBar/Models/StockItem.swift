@@ -117,15 +117,6 @@ struct StockItem: Identifiable, Codable, Equatable {
             case preMarket
             case postMarket
             case overnight
-
-            var label: String? {
-                switch self {
-                case .regular: nil
-                case .preMarket: "PRE"
-                case .postMarket: "POST"
-                case .overnight: "OVN"
-                }
-            }
         }
 
         let price: Double
