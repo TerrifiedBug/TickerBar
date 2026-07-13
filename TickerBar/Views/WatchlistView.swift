@@ -74,25 +74,7 @@ struct WatchlistView: View {
                     .padding(.bottom, 4)
             }
 
-            // Portfolio summary (converted to base currency)
-            if service.totalPortfolioValue > 0 {
-                HStack {
-                    Image(systemName: "chart.pie.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(service.baseCurrencySymbol)\(String(format: "%.0f", service.totalPortfolioValue))")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                    if service.hasCostBasis {
-                        Text(String(format: "%@%+.0f (%.1f%%)", service.baseCurrencySymbol, service.totalPortfolioGain, service.totalPortfolioGainPercent))
-                            .font(.caption)
-                            .foregroundStyle(service.totalPortfolioGain >= 0 ? .green : .red)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 2)
-            }
+            PortfolioSummaryView(service: service)
 
             // Surface holdings excluded from the total because their exchange
             // rate hasn't loaded yet, rather than silently mis-valuing them.
@@ -549,6 +531,127 @@ struct WatchlistView: View {
     }
 }
 
+private struct PortfolioSummaryView: View {
+    @Bindable var service: StockService
+    @State private var expanded = false
+
+    var body: some View {
+        let positions = service.portfolioPositions
+        if !positions.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Button(action: { expanded.toggle() }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chart.pie.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("Portfolio")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                        Spacer(minLength: 4)
+                        HStack(spacing: 4) {
+                            Text(money(service.totalPortfolioValue))
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                            if service.hasCostBasis {
+                                Text(signedPercent(service.totalPortfolioGainPercent))
+                                    .font(.caption2)
+                                    .foregroundStyle(service.totalPortfolioGain >= 0 ? .green : .red)
+                            }
+                        }
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 24, height: 24)
+                    }
+                    .contentShape(Rectangle())
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+                .help(expanded ? "Hide portfolio positions" : "Show portfolio positions")
+
+                if expanded {
+                    positionList(positions)
+                        .padding(.leading, 36)
+                        .padding(.trailing, 12)
+                        .padding(.bottom, 4)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func positionList(_ positions: [PortfolioCalculator.Position]) -> some View {
+        if positions.count > 4 {
+            ScrollView {
+                positionRows(positions)
+            }
+            .frame(height: 148)
+        } else {
+            positionRows(positions)
+        }
+    }
+
+    private func positionRows(_ positions: [PortfolioCalculator.Position]) -> some View {
+        VStack(spacing: 4) {
+            ForEach(positions) { position in
+                positionRow(position)
+            }
+        }
+    }
+
+    private func positionRow(_ position: PortfolioCalculator.Position) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(service.displayName(for: position.stock.symbol))
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                Text("\(shares(position.shares)) sh")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer(minLength: 4)
+            VStack(alignment: .trailing, spacing: 1) {
+                if let value = position.value {
+                    Text(money(value))
+                        .font(.caption)
+                        .monospacedDigit()
+                } else {
+                    Text("FX updating…")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                if let gainPercent = position.gainPercent {
+                    Text(signedPercent(gainPercent))
+                        .font(.caption2)
+                        .foregroundStyle(gainPercent >= 0 ? .green : .red)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func money(_ value: Double) -> String {
+        let amount = value.formatted(
+            .number.grouping(.automatic).precision(.fractionLength(0))
+        )
+        return "\(service.baseCurrencySymbol)\(amount)"
+    }
+
+    private func shares(_ value: Double) -> String {
+        value.formatted(
+            .number.grouping(.automatic).precision(.fractionLength(0...4))
+        )
+    }
+
+    private func signedPercent(_ value: Double) -> String {
+        "\(value >= 0 ? "+" : "−")\(String(format: "%.1f%%", abs(value)))"
+    }
+}
+
 struct StockRowView: View {
     let stock: StockItem
     let displayName: String
@@ -593,11 +696,15 @@ struct StockRowView: View {
         return lines.isEmpty ? displayName : lines.joined(separator: "\n")
     }
 
-    /// Whether any of the extra detail fields are available to show.
-    private var hasDetail: Bool {
+    /// Whether any market detail fields are available to show.
+    private var hasMarketDetail: Bool {
         stock.displayDayHigh != nil || stock.display52WeekHigh != nil
             || stock.displayPostMarketPrice != nil || stock.displayPreMarketPrice != nil
             || stock.displayExtendedMarketPrice != nil
+    }
+
+    private var hasDetail: Bool {
+        hasMarketDetail || !lots.isEmpty
     }
 
     var body: some View {
@@ -696,8 +803,62 @@ struct StockRowView: View {
             if overnightQuote.session == .overnight {
                 detailRow("Overnight", "\(cs)\(fmt(overnightQuote.price)) (\(fmtSigned(overnightQuote.change)))")
             }
+            if hasMarketDetail && !lots.isEmpty {
+                Divider()
+                    .padding(.vertical, 2)
+            }
+            if !lots.isEmpty {
+                Text("Holdings")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                ForEach(lots) { lot in
+                    holdingLotView(lot)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func holdingLotView(_ lot: StockService.Holding) -> some View {
+        let currencySymbol = stock.currencySymbol
+        let value = stock.displayPrice * lot.shares
+        return VStack(alignment: .leading, spacing: 1) {
+            HStack {
+                Text("\(lot.kind == .rsu ? "RSU" : "Purchase") · \(fmtShares(lot.shares)) sh")
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Text("\(currencySymbol)\(fmtMoney(value))")
+                    .foregroundStyle(.secondary)
+            }
+            if let cost = lot.costBasis {
+                let gain = (stock.displayPrice - cost) * lot.shares
+                HStack {
+                    Text("Cost \(currencySymbol)\(fmtMoney(cost)) / sh")
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                    Text("Return \(fmtSignedMoney(gain, symbol: currencySymbol))")
+                        .foregroundStyle(gain >= 0 ? .green : .red)
+                }
+            }
+        }
+        .font(.caption2)
+    }
+
+    private func fmtMoney(_ value: Double) -> String {
+        value.formatted(
+            .number.grouping(.automatic).precision(.fractionLength(2))
+        )
+    }
+
+    private func fmtShares(_ value: Double) -> String {
+        value.formatted(
+            .number.grouping(.automatic).precision(.fractionLength(0...4))
+        )
+    }
+
+    private func fmtSignedMoney(_ value: Double, symbol: String) -> String {
+        "\(value >= 0 ? "+" : "−")\(symbol)\(fmtMoney(abs(value)))"
     }
 
     private func detailRow(_ label: String, _ value: String) -> some View {

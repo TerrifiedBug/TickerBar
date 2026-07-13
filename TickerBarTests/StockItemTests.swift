@@ -191,6 +191,44 @@ final class StockItemTests: XCTestCase {
         XCTAssertEqual(PortfolioCalculator.gain(stocks: stocks, holdings: holdings, baseCurrency: "USD", rates: [:]), 300, accuracy: 0.001)
     }
 
+    func testPortfolioPositionsMatchTotalAndCostedGain() throws {
+        let stocks = [
+            StockItem(symbol: "AAPL", name: "Apple", price: 150, previousClose: 150, currency: "USD"),
+            StockItem(symbol: "7203.T", name: "Toyota", price: 3000, previousClose: 3000, currency: "JPY")
+        ]
+        let holdings: [String: [StockService.Holding]] = [
+            "AAPL": [
+                StockService.Holding(kind: .rsu, shares: 50, costBasis: nil),
+                StockService.Holding(kind: .purchase, shares: 10, costBasis: 80)
+            ],
+            "7203.T": [
+                StockService.Holding(kind: .purchase, shares: 10, costBasis: 2000)
+            ]
+        ]
+        let rates = ["JPY": 0.0067]
+
+        let positions = PortfolioCalculator.positions(
+            stocks: stocks,
+            holdings: holdings,
+            baseCurrency: "USD",
+            rates: rates
+        )
+
+        XCTAssertEqual(positions.map(\.stock.symbol), ["AAPL", "7203.T"])
+        let apple = try XCTUnwrap(positions.first)
+        XCTAssertEqual(apple.shares, 60, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(apple.value), 9000, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(apple.gain), 700, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(apple.gainPercent), 87.5, accuracy: 0.001)
+
+        let expandedTotal = positions.compactMap(\.value).reduce(0, +)
+        XCTAssertEqual(
+            expandedTotal,
+            PortfolioCalculator.totalValue(stocks: stocks, holdings: holdings, baseCurrency: "USD", rates: rates),
+            accuracy: 0.001
+        )
+    }
+
     func testPortfolioCalculatorExcludesMissingRate() {
         let stocks = [StockItem(symbol: "7203.T", name: "Toyota", price: 3000, previousClose: 3000, currency: "JPY")]
         let holdings: [String: [StockService.Holding]] = [
@@ -198,5 +236,16 @@ final class StockItemTests: XCTestCase {
         ]
         XCTAssertEqual(PortfolioCalculator.totalValue(stocks: stocks, holdings: holdings, baseCurrency: "USD", rates: [:]), 0, accuracy: 0.001)
         XCTAssertTrue(PortfolioCalculator.hasUnconverted(stocks: stocks, holdings: holdings, baseCurrency: "USD", rates: [:]))
+
+        let positions = PortfolioCalculator.positions(
+            stocks: stocks,
+            holdings: holdings,
+            baseCurrency: "USD",
+            rates: [:]
+        )
+        XCTAssertEqual(positions.count, 1)
+        XCTAssertEqual(positions[0].shares, 10, accuracy: 0.001)
+        XCTAssertNil(positions[0].value)
+        XCTAssertNil(positions[0].gain)
     }
 }

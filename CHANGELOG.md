@@ -7,6 +7,7 @@ All notable changes to TickerBar will be documented in this file.
 ### Added
 - Custom display names for watchlist stocks, replacing ticker and currency symbols in the menu bar and watchlist for more discreet tracking.
 - Optional live pre-market, after-hours, and overnight prices with extended-session sparklines, compact watchlist indicators, and labeled details when Yahoo provides the data.
+- Expandable portfolio summaries now show grouped position values and returns, while each stock’s details include its individual purchase and RSU lots.
 
 ### Fixed
 - Stock-row detail chevrons now have a larger click target, so expanding a row no longer requires pixel-perfect accuracy.
